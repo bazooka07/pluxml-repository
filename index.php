@@ -9,7 +9,7 @@
  * Ajustez la constante FOLDER selon vos désirs.
  * 
  * @author Jean-Pierre Pourrez
- * @version 2015-10-28 - gère les multiples versions des plugins et génére un cache
+ * @version 2015-10-29 - gère les multiples versions des plugins et génére un cache
  * @license GNU General Public License, version 3
  * @see http://www.pluxml.org
  * 
@@ -20,13 +20,11 @@ if (! class_exists('ZipArchive')) {
 	exit;
 }
 
-define('VERSION', '2015-10-28');
+define('VERSION', '2015-10-29');
 define('FOLDER', 'plugins');
 define('CACHE_FILE', 'cache.json');
 define('INFOS_FILE', 'infos.xml');
 define('INFOS_FILE_LEN', strlen(INFOS_FILE));
-define('ICON_FILE', '/icon.png');
-define('ICON_FILE_LEN', strlen(ICON_FILE));
 define('LIFETIME', 7 * 24 * 3600); // in secondes (temps Unix) for rebuilding $cache
 
 $root = $_SERVER['PHP_SELF'];
@@ -96,7 +94,7 @@ function getPluginIcon(ZipArchive $zipFile) {
 	$result = '<span class="missing">&nbsp;</span>';
 	for ($i=0; $i<$zipFile->numFiles; $i++) {
 		$filename = $zipFile->getNameIndex($i);
-		if (substr($filename, - ICON_FILE_LEN) == ICON_FILE) {
+		if (preg_match('#/icon\.(?:jpg|png|gif)$#', $filename)) {
 			$src = $zipFile->getFromName($filename);
 			$result = '<img src="data:image/x-icon;base64,'.base64_encode($src).'" alt="Icône" />';
 			break;
@@ -296,6 +294,8 @@ if (! empty($_GET)) {
 		p:last-of-type, #detail + p {text-align: center;}
 		h1 {margin-top: 0;}
 		h1 + p {margin-bottom: 0;}
+		a {padding: 0 4px;}
+		a:hover {color: #FFF; background-color: green;}
 		#detail {width: 99%; background-color: #FFF; border: 1px solid #A99; margin: 5px auto; border-spacing: 0;}
 		#detail thead {background-color: #C2C2A6; }
 		#detail th {padding: 5px 2px;}
@@ -308,6 +308,9 @@ if (! empty($_GET)) {
 		#detail + p {font-style: italic; font-size: 80%;}
 		#detail .missing {display: inline-block; background: url('data:image/png;base64,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') no-repeat center center; }
 		#detail img, #detail .missing {width: 48px; height: 48px;}
+		#detail td:first-of-type a:hover {background-color: initial;}
+		#detail td:first-of-type img, #detail td:first-of-type span {border: 2px solid transparent;}
+		#detail td:first-of-type img:hover, #detail td:first-of-type span:hover {border-color: green;}
 		#help_nav {display: none;}
 		#help_nav + div {display:none; position: absolute; top: 10em; right: 10%; width: 400px; margin:0; padding: 10px; background-color: #DFF5F1; border: 1px solid #4B7A9C; border-radius: 5px; text-align: justify; z-index: 10;}
 		#help_nav:checked + div {display: block;}
@@ -323,8 +326,6 @@ if (! empty($_GET)) {
 		.first td {border-top: 2px solid #A99;}
 		.rss {margin: 0; padding: 0}
 		.rss:hover {background-color: inherit;}
-		a {padding: 0 4px;}
-		a:hover {color: #FFF; background-color: green;}
 	</style>
 </head>
 <body><div id="bandeau">
@@ -377,8 +378,9 @@ if (isset($cache)) {
 			    if ($res = $zip->open($download)) {
 					$cell1 = getPluginIcon($zip);
 					$zip->close();
-			    }				
-				$cell2 = '<a href="'.$download.'"><strong>'.$plugin.'</strong></a>';
+			    }
+			    $cell1 = '<a href="'.$download.'">'.$cell1.'</a>';
+				$cell2 = $plugin;
 				$cell4 = '<a href="'.$root.'?plugin='.$plugin.'" target="_blank">'.$version.'</a>';
 				$cell6 = '<a href="'.$root.'?plugin='.$plugin.'&infos" target="_blank">'.$filedate.'</a>'; 
 			} else {
@@ -389,7 +391,7 @@ if (isset($cache)) {
 			}
 			echo <<< VERSION
 			<td>$cell1</td>
-			<td>$cell2</td>
+			<td><strong>$cell2</strong></td>
 			<td>$cell4</td>
 			<td><a href="$download">$filename</a></td>
 			<td>$url</td>
