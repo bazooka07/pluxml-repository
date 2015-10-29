@@ -4,6 +4,7 @@ Gestionnaire d'un dépôt de plugins pour Pluxml
 Crée une page d'accueil pour afficher la liste de plugins dans leurs différentes versions et télécharger l'archive zip correspondante.
 
 Si la page index.php est dans le dossier repository sur le serveur http://www.monsite.com, alors le catalogue de plugins au format JSON du site est accessible à l'adresse :
+
 http://www.monsite.com/repository/?json
 Les archives zip des plugins sont à déposer dans le dossier /repository/plugins du serveur.
 
