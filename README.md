@@ -6,6 +6,7 @@ Crée une page d'accueil pour afficher la liste de plugins dans leurs différent
 Si la page index.php est dans le dossier repository sur le serveur http://www.monsite.com, alors le catalogue de plugins au format JSON du site est accessible à l'adresse :
 
 http://www.monsite.com/repository/?json
+
 Les archives zip des plugins sont à déposer dans le dossier /repository/plugins du serveur.
 
 Si on veut connaitre la dernière version disponible du plugin XXXXXX, lire le contenu au format text/plain de l'adresse :
