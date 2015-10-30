@@ -4,21 +4,25 @@ $cache = array(
 	'plugin1' => array(
 		'3000' => array(
 			'dossier_archives/plugin1-3.zip', '2015-10-03', '3.0', 'http://www.monsite.com/depot/',
+			'Jean Khol', 'http://www.monsite.com', 
 			'Description de mon super plugin plugin3 en version 3.0', 'Aucun pré-requis'
 		),
 		'2500' => array(
 			'dossier_archives/plugin1-2.zip', '2015-09-23', '2.5', 'http://www.monsite.com/depot/',
+			'Jean Khol', '', 
 			'Description de mon super plugin plugin3 en version 3.0', ''
 		),
 		'0600' => array(
 			'dossier_archives/plugin1-2.zip', '2015-09-23', '0.6', 'http://www.monsite.com/depot/',
-			'1ère R.C. candiadate de mon super plugin plugin3 en version 3.0', 'Aucun pré-requis'
+			'Michel Martin', 'http://www.monsite.com', 
+			'1ère R.C. candidate de mon super plugin plugin3 en version 3.0', 'Aucun pré-requis'
 		)
     ),    
 	// ..........
 	'plugin99' => array(
 		'1000' => array(
 			'dossier_archives/plugin99-master.zip', '2015-10-03', '1.0', 'http://www.monsite.com/depot/',
+			'Michel Martin', 'http://www.monsite.com', 
 			'Description de mon super plugin plugin99', 'Jquery, Pluxml 5.4'
 		)
     )
@@ -46,5 +50,4 @@ list($download, $filedate, $version, $repository, $author, $site, $description, 
  *    $repository .= '/';
  * $archive = file_get_contents($repository.$download) ;
  * */
-
 ?>

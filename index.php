@@ -9,7 +9,7 @@
  * Ajustez la constante FOLDER selon vos désirs.
  * 
  * @author Jean-Pierre Pourrez
- * @version 2015-10-29 - gère les multiples versions des plugins et génére un cache
+ * @version 2015-10-30 - gère les multiples versions des plugins et génére un cache
  * @license GNU General Public License, version 3
  * @see http://www.pluxml.org
  * 
@@ -20,12 +20,13 @@ if (! class_exists('ZipArchive')) {
 	exit;
 }
 
-define('VERSION', '2015-10-29');
+define('VERSION', '2015-10-30');
 define('FOLDER', 'plugins');
 define('CACHE_FILE', 'cache.json');
+define('CACHE_ICONS', 'icons.bin');
 define('INFOS_FILE', 'infos.xml');
 define('INFOS_FILE_LEN', strlen(INFOS_FILE));
-define('LIFETIME', 7 * 24 * 3600); // in secondes (temps Unix) for rebuilding $cache
+define('LIFETIME', 7 * 24 * 3600); // in secondes (temps Unix) for rebuilding $cache and $cache_icons
 
 $root = $_SERVER['PHP_SELF'];
 
@@ -33,19 +34,25 @@ $root = $_SERVER['PHP_SELF'];
  * Vérifie si le cache a besoin d'une mise à jour
  * On ne fait la mise à jour que toutes les LIFETIME minutes
  * */
-function needs_update($aFile) {
+function needs_update() {
 	$result = false;
-	$refTime = filemtime($aFile);
-	if (time() - $refTime > LIFETIME)
+	if (! file_exists(CACHE_FILE) or ! file_exists(CACHE_ICONS))
 		$result = true;
 	else {
-		$files = scandir(FOLDER);
-		foreach ($files as $f) {
-			if (substr($f, -4) == '.zip') {
-				$filename = FOLDER.'/'.$f;
-				if ($refTime < filemtime($filename)) {
-					$result = true;
-					break;
+		$refTime = filemtime(CACHE_FILE);
+		if (time() - $refTime > LIFETIME)
+			// caches are too old
+			$result = true;
+		else {
+			$files = scandir(FOLDER);
+			foreach ($files as $f) {
+				if (substr($f, -4) == '.zip') {
+					$filename = FOLDER.'/'.$f;
+					if ($refTime < filemtime($filename)) {
+						// one file is more recent than the cache
+						$result = true;
+						break;
+					}
 				}
 			}
 		}
@@ -90,6 +97,7 @@ function getPluginName(ZipArchive $zipFile) {
 /*
  * Extrait l'icône icon.png de l'archive Zip
  * */
+ // not used !
 function getPluginIcon(ZipArchive $zipFile) {
 	$result = '<span class="missing">&nbsp;</span>';
 	for ($i=0; $i<$zipFile->numFiles; $i++) {
@@ -103,14 +111,16 @@ function getPluginIcon(ZipArchive $zipFile) {
 	return $result;
 }
 
-function buildCache(array $files) {
+function buildCaches(array $files) {
 	$cache = array();
+	$cache_icons = array();
 	$zip = new ZipArchive();
 	foreach($files as $f) {
 		if (substr($f, -4) == '.zip') {
 			$name = substr($f, 0, -4);
 			$filename = FOLDER.'/'.$f;
-			$filedate = date('c', filemtime($filename));
+			$filedateEpoc = filemtime($filename);
+			$filedate = date('c', $filedateEpoc);
 			if ($res = $zip->open($filename)) {
 				if ($infoFile = searchInfosFile($zip)) {
 					$infos = $zip->getFromName($infoFile);
@@ -129,15 +139,27 @@ function buildCache(array $files) {
 		            if (! array_key_exists($key, $cache))
 						$cache[$key] = array();
 					$cache[$key][$versionOrder] = $values;
+					// look for an icon
+					for ($i=0; $i<$zip->numFiles; $i++) {
+						$filenameIcon = $zip->getNameIndex($i);
+						if (preg_match('#/icon\.(jpg|png|gif)$#', $filenameIcon, $matches)) {
+							if (! array_key_exists($key, $cache_icons) or ($cache_icons[$key][1] < $filedateEpoc)) {
+								// on garde l'icone de la dernière version
+								$icon = $zip->getFromName($filenameIcon);
+								$cache_icons[$key] = array($filedateEpoc, $matches[1], $icon);
+							}
+							break;
+						}
+					}
 				}
 				$zip->close();
 			}
 		}
 	}
-	return $cache;
+	return array($cache, $cache_icons);
 }
 
-function sendRSS(array $cache) {
+function sendRSS(array $cache, array $cache_icons) {
 	global $root;
 	
 	$temp = array();
@@ -145,7 +167,7 @@ function sendRSS(array $cache) {
 		$key = array_keys($versions)[0];
 		$lastRelease = $versions[$key];
 		list($download, $filedate, $version, $repository, $author, $site, $description, $requirements) = $lastRelease;
-		$temp[$filedate.'-'.$plugin] = array($plugin.' - '.$version, $download, $description, $filedate);
+		$temp[$filedate.'-'.$plugin] = array($plugin, $version, $download, $description, $filedate);
 	}
 	krsort($temp);
 	$lastUpdates = array_slice($temp, 0, 10); // 10 items for the RSS feed
@@ -170,16 +192,28 @@ function sendRSS(array $cache) {
 RSS_STARTS;
 	$folder = dirname($root);
 	foreach($lastUpdates as $key=>$item) {
-		list($title, $link, $description, $filedate) = $item;
+		list($plugin, $version, $link, $description, $filedate) = $item;
+		$title = $plugin.' - '.$version;
 		$pubDate = date('r', strtotime($filedate));
 		$description = htmlspecialchars($description, ENT_COMPAT | ENT_XML1);
 		$guid = 'http://'.$hostname.$folder.'/'.$link.'_'.substr($filedate, 0, 10);
+		if (array_key_exists($plugin, $cache_icons)) {
+			list($imageType, $content) = $cache_icons[$plugin];
+			if ($imageType == 'jpg')
+				$imageType = 'jpeg';
+			$length = strlen($content);
+			$enclosure = <<< ENCLOSURE
+
+		<enclosure url="http://$hostname$folder/index.php?plugin=$plugin&amp;icon" lenght="$length" type="image/$imageType" />
+ENCLOSURE;
+		} else
+			$enclosure = '';
 		echo <<< ITEM
 	<item>
 		<title>$title</title>
 		<link>http://$hostname$folder/$link</link>
 		<description>$description</description>
-		<pubDate>$pubDate</pubDate>
+		<pubDate>$pubDate</pubDate>$enclosure
 		<guid>$guid</guid>
 	</item>
 
@@ -195,6 +229,14 @@ RSS_ENDS;
 if (! is_dir(FOLDER))
 	mkdir(FOLDER);
 
+// clean up caches for an update of this script
+$caches = array(CACHE_FILE, CACHE_ICONS);
+$lastUpdateProg = filemtime(__FILE__);
+foreach ($caches as $file1) {
+	if (file_exists($file1) and (filemtime($file1) < $lastUpdateProg))
+		unlink($file1);
+}
+
 if ($files = scandir(FOLDER)) {
 	/*
 	 * $cache contient la liste des plugins et de leurs différentes versions
@@ -203,15 +245,19 @@ if ($files = scandir(FOLDER)) {
 	 * la valeur est un tableau associatif avec :
 	 * la clé est le numéro de version du plugin
 	 * la valeur est un tableau ordinaire contenant
-	 * le nom de l'archive
-	 * la date de l'archive
-	 * puis les champs du fichier infos.xml, à savoir : $author, $site, $description, $requirements
-	 * 
+	 * le nom de l'archive ($filename)
+	 * la date de l'archive ($filedate)
+	 * le numéro de version comme indiqué dans le fichier infos.xml ($version)
+	 * l'url où demander l'archive zip du plugin ($repository)
+	 * l'auteur ($author)
+	 * le site web de l'auteur ($site)
+	 * la description du plugin ($description)
+	 * les pré-requis ($requirements).
 	 * le numéro de version contenu dans infos.xml est converti en flottant à multiplier par 1000
 	 * et à convertir en entier pour trier les versions
 	 * */
-	if (! file_exists(CACHE_FILE) or needs_update(CACHE_FILE)) {
-		$cache = buildCache($files);
+	if (needs_update()) {
+		list($cache, $cache_icons) = buildCaches($files);
 		// tri et sauvegarde du cache sur le disque dur si non vide
 		if (! empty($cache)) {
 			ksort($cache);
@@ -221,10 +267,16 @@ if ($files = scandir(FOLDER)) {
 			// encodage et sauvegarde (il y a du javascript dans l'air)
 			if (file_put_contents(CACHE_FILE, json_encode($cache), LOCK_EX) === false)
 				$error = 'Pas de droit en écriture sur le disque dur<br />Contactez votre webmaster.';
+			else
+				// file_put_contents(CACHE_ICONS, json_encode($cache_icons), LOCK_EX);
+				file_put_contents(CACHE_ICONS, serialize($cache_icons), LOCK_EX);
 		} else
             unset($cache);
-	} else
+	} else {
 		$cache = json_decode(file_get_contents(CACHE_FILE), true);
+		// $cache_icons = json_decode(file_get_contents(CACHE_ICONS), true);
+		$cache_icons = unserialize(file_get_contents(CACHE_ICONS));
+	}
 }
 
 if (! empty($_GET)) {
@@ -250,11 +302,25 @@ if (! empty($_GET)) {
 						$zip->close();
 					}
 				} else if (isset($_GET['download'])) { // envoi l'archive zip du plugin
-					header("Content-Type: application/zip");
+					header('Content-Type: application/zip');
 				    header('Content-Length: ' . filesize($download));
 				    header('Content-Disposition: attachment; filename="'.basename($download).'"');
 					readfile($download);
 					exit;
+				} else if (isset($_GET['icon'])) { // envoi de l'icône du plugin
+					if (array_key_exists($pluginName, $cache_icons)) {
+						list($filedateEpoc, $mimetype, $content) = $cache_icons[$pluginName];
+						if ($mimetype == 'jpg')
+							$mimetype = 'jpeg';
+						header('Content-Length: '.strlen($content));
+						header('Content-Type: image/'.$mimetype);
+						echo $content;
+					} else {
+						header('HTTP/1.0 404 Not Found');
+						header('Content-Type: text/plain');
+						echo 'Icon not found for '.$pluginName.' plugin.';
+					}
+					exit;				
 				} else { // send version of plugin
 					$result = $version;
 				}
@@ -266,7 +332,7 @@ if (! empty($_GET)) {
 			exit;
 	    } else if (isset($_GET['rss'])) { // envoi flux RSS des 10 dernières nouveautés
 			// Look for the last version of each plugin
-			sendRSS($cache);
+			sendRSS($cache, $cache_icons);
 		    exit;
 		}
 	}
@@ -274,15 +340,7 @@ if (! empty($_GET)) {
 	echo $result;
 	exit;
 }
-?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
-	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
-<head>
-	<title>Dépôt de plugins pour Pluxml</title>
-	<meta http-equiv="content-type" content="text/html;charset=utf-8" />
-	<link rel="alternate" type="application/rss+xml" href="<?php echo $root; ?>?rss" title="Dépôt de plugins pour Pluxml" />
-	<style>
+$styles = <<< STYLES
 		body {font: 1em; font-family: droid, arial, georgia,sans-serif; color: #000; background-color: rgba(214, 215, 200, 0.8);}
 		#bandeau {display: flex; max-width: 900px; margin: 1em auto; padding: 0;}
 		#logo  {
@@ -326,6 +384,18 @@ if (! empty($_GET)) {
 		.first td {border-top: 2px solid #A99;}
 		.rss {margin: 0; padding: 0}
 		.rss:hover {background-color: inherit;}
+
+STYLES;
+?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+	<title>Dépôt de plugins pour Pluxml</title>
+	<meta http-equiv="content-type" content="text/html;charset=utf-8" />
+	<link rel="alternate" type="application/rss+xml" href="<?php echo $root; ?>?rss" title="Dépôt de plugins pour Pluxml" />
+	<style>
+<?php echo $styles; ?>
 	</style>
 </head>
 <body><div id="bandeau">
@@ -347,7 +417,7 @@ if (! empty($_GET)) {
 			<li>Ensuite, se connecter sur l'administration de Pluxml pour activer le plugin</li>
 		</ul>
 	</div>
-	<table id="detail">
+	<table id="detail"> <!-- catalogue starts here -->
 		<thead>
 			<tr>
 				<th colspan="2">Nom du plugin</th>
@@ -375,10 +445,17 @@ if (isset($cache)) {
 			if ($firstRow) {
 				// get the icon plugin
 				$cell1 = '<span class="missing">&nbsp;</span>';
+				/*
 			    if ($res = $zip->open($download)) {
 					$cell1 = getPluginIcon($zip);
 					$zip->close();
 			    }
+				* */
+				if (array_key_exists($plugin, $cache_icons)) {
+					// list($imageType, $content) = $cache_icons[$plugin];
+					list($filedateEpoc, $imageType, $content) = $cache_icons[$plugin];
+					$cell1 = '<img src="data:image/x-icon;base64,'.base64_encode($content).'" alt="Icône" />';
+				}
 			    $cell1 = '<a href="'.$download.'">'.$cell1.'</a>';
 				$cell2 = $plugin;
 				$cell4 = '<a href="'.$root.'?plugin='.$plugin.'" target="_blank">'.$version.'</a>';
@@ -411,7 +488,7 @@ VERSION;
 		</tr>	
 <?php } ?>
 		</tbody>
-	</table>
+	</table> <!-- catalogue ends here -->
 	<p>
 		Lovely designed by theirs authors - 
 		<a href="http://www.kazimentou.fr/pluxml-plugins2/repository2-<?php echo VERSION; ?>.zip">Download source of this page</a>
@@ -422,6 +499,7 @@ VERSION;
 		<li><strong><?php echo $root; ?>?plugin=xxxxxx</strong> renvoie le numéro de version du plugin xxxxxx au format texte</li>
 		<li><strong><?php echo $root; ?>?plugin=xxxxxx&amp;download</strong> télécharge la dernière version du plugin xxxxxx</li>
 		<li><strong><?php echo $root; ?>?plugin=xxxxxx&amp;infos</strong> renvoie les infos du plugin xxxxxx au format XML</li>
+		<li><strong><?php echo $root; ?>?plugin=xxxxxx&amp;icon</strong> renvoie l'icône du plugin xxxxxx</li>
 		<li><strong><?php echo $root; ?>?json</strong> renvoie toutes les infos des plugins pour toutes les versions au format JSON (<a href="<?php echo $root; ?>?json" target="_blank">Catalogue</a>)</li>
 		<li><strong><?php echo $root; ?>?rss</strong> Récupère le flux RSS des 10 dernières mises à jour (<a href="<?php echo $root; ?>?rss" target="_blank">RSS</a>)</li>
 	</ul>

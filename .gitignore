@@ -1,5 +1,5 @@
 *.zip
 *.bak
 cache.json
+icons.bin
 plugins/*.zip
-
