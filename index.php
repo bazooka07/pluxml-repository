@@ -424,7 +424,7 @@ if (! empty($_GET)) {
 			<li>Ensuite, se connecter sur l'administration de Pluxml pour activer le plugin</li>
 		</ul>
 	</div>
-	<h3>Liste des plugins disponibles</h3>
+	<h3>Liste des plugins disponibles (<i>Cliquez sur l'icône pour avoir la version la plus récente</i>)</h3>
 	<table id="detail"> <!-- catalogue starts here -->
 		<thead>
 			<tr>
@@ -459,7 +459,7 @@ if (isset($cache)) {
 					list($filedateEpoc, $imageType, $sizeIcon, $content) = $cache_icons[$pluginName];									
 					$cell1 = '<img src="data:image/x-icon;base64,'.base64_encode($content).'" alt="Icône" />';
 				}
-			    $cell1 = '<a href="'.$download.'">'.$cell1.'</a>';
+			    $cell1 = '<a href="'.$root.'?plugin='.$pluginName.'&download">'.$cell1.'</a>';
 				$cell2 = $pluginName;
 				$cell4 = '<a href="'.$root.'?plugin='.$pluginName.'" target="_blank">'.$version.'</a>';
 				$cell6 = '<a href="'.$root.'?plugin='.$pluginName.'&infos" target="_blank">'.$filedate.'</a>'; 
