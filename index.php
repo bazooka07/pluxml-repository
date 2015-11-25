@@ -128,33 +128,37 @@ function buildCaches(array $files) {
 			if ($res = $zip->open($filename)) {
 				if ($infoFile = searchInfosFile($zip)) {
 					$infos = $zip->getFromName($infoFile);
-		            @$doc = new SimpleXMLElement($infos);
-		            $title = $doc->title->__toString();
-		            $author = $doc->author->__toString();
-		            $version = $doc->version->__toString();
-		            $versionOrder = intval(floatval($version) * 1000.0);
-		            $site = $doc->site->__toString();
-		            $repository = $doc->repository->__toString();
-		            $description = $doc->description->__toString();
-		            $requirements = $doc->requirements->__toString();
-		            $values = array($filename, $filedate, $version, $repository, $author, $site, $description, $requirements);
-		            $keyName = getPluginName($zip);
-		            // on vérifie si le plugin existe déjà dans le cache
-		            if (! array_key_exists($keyName, $cache))
-						$cache[$keyName] = array();
-					$cache[$keyName][$versionOrder] = $values;
-					// look for an icon
-					for ($i=0; $i<$zip->numFiles; $i++) {
-						$filenameIcon = $zip->getNameIndex($i);
-						if (preg_match('#/icon\.(jpg|png|gif)$#', $filenameIcon, $matches)) {
-							if (! array_key_exists($keyName, $cache_icons) or ($cache_icons[$keyName][1] < $filedateEpoc)) {
-								// on garde l'icone de la dernière version
-								$icon = $zip->getFromIndex($i);
-								$stats = $zip->StatIndex($i); // keys in array('name', 'index', 'crc', 'size', 'mtime', 'comp_size', ' comp_methohd');
-								$cache_icons[$keyName] = array($filedateEpoc, $matches[1], $stats['size'], $icon);
+					try {
+			            @$doc = new SimpleXMLElement($infos);
+			            $title = $doc->title->__toString();
+			            $author = $doc->author->__toString();
+			            $version = $doc->version->__toString();
+			            $versionOrder = intval(floatval($version) * 1000.0);
+			            $site = $doc->site->__toString();
+			            $repository = $doc->repository->__toString();
+			            $description = $doc->description->__toString();
+			            $requirements = $doc->requirements->__toString();
+			            $values = array($filename, $filedate, $version, $repository, $author, $site, $description, $requirements);
+			            $keyName = getPluginName($zip);
+			            // on vérifie si le plugin existe déjà dans le cache
+			            if (! array_key_exists($keyName, $cache))
+							$cache[$keyName] = array();
+						$cache[$keyName][$versionOrder] = $values;
+						// look for an icon
+						for ($i=0; $i<$zip->numFiles; $i++) {
+							$filenameIcon = $zip->getNameIndex($i);
+							if (preg_match('#/icon\.(jpg|png|gif)$#', $filenameIcon, $matches)) {
+								if (! array_key_exists($keyName, $cache_icons) or ($cache_icons[$keyName][1] < $filedateEpoc)) {
+									// on garde l'icone de la dernière version
+									$icon = $zip->getFromIndex($i);
+									$stats = $zip->StatIndex($i); // keys in array('name', 'index', 'crc', 'size', 'mtime', 'comp_size', ' comp_methohd');
+									$cache_icons[$keyName] = array($filedateEpoc, $matches[1], $stats['size'], $icon);
+								}
+								break;
 							}
-							break;
 						}
+					} catch (Exception $e) {
+						error_log(date('Y-m-d H:i').' - fichier infos.xml incorrect pour le plugin '.$f.' - Ligne n°'.$e->getLine().': '.$e->getMessage()."\n", 3, dirname(__FILE__).'/errors.log');
 					}
 				}
 				$zip->close();
