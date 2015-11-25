@@ -20,7 +20,7 @@ if (! class_exists('ZipArchive')) {
 	exit;
 }
 
-define('VERSION', '2015-10-30');
+define('VERSION', date('Y-m-d', filemtime(__FILE__)));
 define('FOLDER', 'plugins');
 define('CACHE_FILE', 'cache.json');
 define('CACHE_ICONS', 'icons.bin');
@@ -351,6 +351,34 @@ if (! empty($_GET)) {
 	echo $result;
 	exit;
 }
+
+function download_source() {
+	$filename = 'repository2-'.VERSION.'.zip';
+	if (! file_exists($filename)) {
+		$zip = new ZipArchive();
+		if ($zip->open($filename, ZipArchive::CREATE) === true) {
+			$infos = <<< INFOS
+<html lang="fr">
+<head>
+<meta http-equiv="content-type" content="text/html;charset=utf-8" />
+<title>Dépôt de plugins pour Pluxml</title>
+</head>
+<body>
+<p>
+<a href="http://www.kazimentou.fr/pluxml-plugins2/">Voir démo</a><br />
+<a href="https://github.com/bazooka07/Pluxml-repository">Github</a>
+</p>
+</body>
+</html>
+INFOS;
+			$zip->addFromString('lisez-moi.html', $infos);
+			$zip->addFile(basename(__FILE__));
+			$zip->addFile('demo.php');
+			$zip->close();
+		}
+	}
+	echo 'http://'.$_SERVER['HTTP_HOST'].dirname($_SERVER['SCRIPT_NAME']).'/'.$filename;
+}
 ?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
 	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
@@ -498,7 +526,7 @@ VERSION;
 	</table> <!-- catalogue ends here -->
 	<p>
 		Lovely designed by theirs authors - 
-		<a href="http://www.kazimentou.fr/pluxml-plugins2/repository2-<?php echo VERSION; ?>.zip">Download source of this page</a>
+		<a href="<?php download_source(); ?>">Download source of this page</a>
 		version <?php echo VERSION; ?> - 
 		Php <?php echo PHP_VERSION; ?>
 	</p>
