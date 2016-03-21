@@ -5,14 +5,14 @@
  * http://www.mondepot.com/index.php?plugin=xxxxxx&infos renvoie les infos du plugin au format XML
  * xxxxxx est le nom de l'archive Zip du plugin, stocké dans le dossier FOLDER défini ci-dessous.
  * L'archive et le plugin ont le même nom par convention.
- * 
+ *
  * Ajustez la constante FOLDER selon vos désirs.
- * 
+ *
  * @author Jean-Pierre Pourrez
  * @version 2015-10-30 - gère les multiples versions des plugins et génére un cache
  * @license GNU General Public License, version 3
  * @see http://www.pluxml.org
- * 
+ *
  * */
 
 if (! class_exists('ZipArchive')) {
@@ -170,7 +170,7 @@ function buildCaches(array $files) {
 
 function sendRSS(array $cache, array $cache_icons) {
 	global $root;
-	
+
 	$temp = array();
 	foreach($cache as $pluginName=>$versions) {
 		$keyVersion = array_keys($versions)[0];
@@ -289,7 +289,9 @@ if ($files = scandir(FOLDER)) {
 	}
 }
 
-if (! empty($_GET)) {
+$displayAll = (isset($_GET['all_versions']));
+
+if (! empty($_GET) and !isset($_GET['all_versions'])) {
 	$result = 'Not found';
 	if (isset($cache)) {
 		if (isset($_GET['plugin'])) {
@@ -320,7 +322,7 @@ if (! empty($_GET)) {
 				} else if (isset($_GET['icon'])) { // envoi de l'icône du plugin
 					if (array_key_exists($pluginName, $cache_icons)) {
 						// list($filedateEpoc, $mimetype, $content) = $cache_icons[$pluginName];
-						list($filedateEpoc, $mimetype, $sizeIcon, $content) = $cache_icons[$pluginName];			
+						list($filedateEpoc, $mimetype, $sizeIcon, $content) = $cache_icons[$pluginName];
 						if ($mimetype == 'jpg')
 							$mimetype = 'jpeg';
 						header('Content-Length: '.strlen($content));
@@ -331,7 +333,7 @@ if (! empty($_GET)) {
 						header('Content-Type: text/plain');
 						echo 'Icon not found for '.$pluginName.' plugin.';
 					}
-					exit;				
+					exit;
 				} else { // send version of plugin
 					$result = $version;
 				}
@@ -379,6 +381,9 @@ INFOS;
 	}
 	echo 'http://'.$_SERVER['HTTP_HOST'].dirname($_SERVER['SCRIPT_NAME']).'/'.$filename;
 }
+
+$query_versions = ($displayAll) ? '': '?all_versions';
+$label_versions = ($displayAll) ? 'la dernière version seulement' : 'toutes les versions';
 ?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
 	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
@@ -392,6 +397,8 @@ INFOS;
 		#bandeau {display: flex; max-width: 900px; margin: 1em auto; padding: 0;}
 		h1, h2, h3 {text-align: center;}
 		h3 {margin: 0.5em 0;}
+		h3 + p {margin:0; padding:0; text-align: center; font-style: italic;}
+		h3 + p a {padding: 0 10px;}
 		#bandeau h2 {margin: 0;}
 		#bandeau a {text-decoration: none;}
 		#bandeau div:nth-of-type(2) {margin: auto; padding: 0;}
@@ -421,9 +428,9 @@ INFOS;
 		#help_nav:checked + div {display: block;}
 		#help_nav + div ul {padding-left: 1em;}
 		#help_nav + div + table #help::before {display: inline-block; width: 75px; text-align: right; content: 'Afficher'}
-		#help_nav:checked + div + table #help::before {content: 'Masquer';}		
+		#help_nav:checked + div + table #help::before {content: 'Masquer';}
 		#help_nav:checked + div + table #help {color: #FFF; background-color: green;}
-		#help_nav + div ul {margin: 0.5em 0;}		
+		#help_nav + div ul {margin: 0.5em 0;}
 		th[title]:hover {background-color: yellow; cursor: help;}
 		td {border-left: 1px solid #A99;}
 		td:first-of-type, td:nth-of-type(2) {border-left: inherit;}
@@ -456,7 +463,10 @@ INFOS;
 			<li>Ensuite, se connecter sur l'administration de Pluxml pour activer le plugin</li>
 		</ul>
 	</div>
-	<h3>Liste des plugins disponibles (<i>Cliquez sur l'icône pour avoir la version la plus récente</i>)</h3>
+	<h3>Liste des plugins disponibles</h3>
+	<p>
+		<a href="index.php<?php echo $query_versions; ?>">Afficher <?php echo $label_versions; ?></a>
+	</p>
 	<table id="detail"> <!-- catalogue starts here -->
 		<thead>
 			<tr>
@@ -480,7 +490,7 @@ if (isset($cache)) {
             $url = (strlen($site) > 0) ? '<a href="'.$site.'" target="_blank">'.$author.'</a>' : $author;
             $filedate = substr($filedate, 0, 10);
             $filename = basename($download); ?>
-	    <tr<?php echo ($firstRow) ? ' class="first"' : ''; ?>>
+	    <tr<?php echo ($displayAll and $firstRow) ? ' class="first"' : ''; ?>>
 <?php
 			if ($firstRow) {
 				// get the icon plugin
@@ -488,13 +498,13 @@ if (isset($cache)) {
 				if (array_key_exists($pluginName, $cache_icons)) {
 					// list($imageType, $content) = $cache_icons[$pluginName];
 					// list($filedateEpoc, $imageType, $content) = $cache_icons[$pluginName];
-					list($filedateEpoc, $imageType, $sizeIcon, $content) = $cache_icons[$pluginName];									
+					list($filedateEpoc, $imageType, $sizeIcon, $content) = $cache_icons[$pluginName];
 					$cell1 = '<img src="data:image/x-icon;base64,'.base64_encode($content).'" alt="Icône" />';
 				}
 			    $cell1 = '<a href="'.$root.'?plugin='.$pluginName.'&download" download>'.$cell1.'</a>';
 				$cell2 = $pluginName;
 				$cell4 = '<a href="'.$root.'?plugin='.$pluginName.'" target="_blank">'.$version.'</a>';
-				$cell6 = '<a href="'.$root.'?plugin='.$pluginName.'&infos" target="_blank">'.$filedate.'</a>'; 
+				$cell6 = '<a href="'.$root.'?plugin='.$pluginName.'&infos" target="_blank">'.$filedate.'</a>';
 			} else {
 				$cell1 = '&nbsp;';
 				$cell2 = '&nbsp;';
@@ -513,21 +523,25 @@ if (isset($cache)) {
 
 VERSION;
 			$firstRow = false;
-		} ?>
+?>
 		</tr>
 <?php
+			if ($displayAll === false) {
+				break;
+			}
+		}
 	}
 } else { ?>
 		<tr>
 			<td colspan="8" class="alert">Le dépôt ne contient aucun plugin.</td>
-		</tr>	
+		</tr>
 <?php } ?>
 		</tbody>
 	</table> <!-- catalogue ends here -->
 	<p>
-		Lovely designed by theirs authors - 
+		Lovely designed by theirs authors -
 		<a href="<?php download_source(); ?>">Download source of this page</a>
-		version <?php echo VERSION; ?> - 
+		version <?php echo VERSION; ?> -
 		Php <?php echo PHP_VERSION; ?>
 	</p>
 	<h3>Paramètres de l'url</h3>
