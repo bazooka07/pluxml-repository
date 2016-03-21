@@ -491,7 +491,7 @@ if (isset($cache)) {
 					list($filedateEpoc, $imageType, $sizeIcon, $content) = $cache_icons[$pluginName];									
 					$cell1 = '<img src="data:image/x-icon;base64,'.base64_encode($content).'" alt="Icône" />';
 				}
-			    $cell1 = '<a href="'.$root.'?plugin='.$pluginName.'&download">'.$cell1.'</a>';
+			    $cell1 = '<a href="'.$root.'?plugin='.$pluginName.'&download" download>'.$cell1.'</a>';
 				$cell2 = $pluginName;
 				$cell4 = '<a href="'.$root.'?plugin='.$pluginName.'" target="_blank">'.$version.'</a>';
 				$cell6 = '<a href="'.$root.'?plugin='.$pluginName.'&infos" target="_blank">'.$filedate.'</a>'; 
@@ -505,7 +505,7 @@ if (isset($cache)) {
 			<td>$cell1</td>
 			<td><strong>$cell2</strong></td>
 			<td>$cell4</td>
-			<td><a href="$download">$filename</a></td>
+			<td><a href="$download" download>$filename</a></td>
 			<td>$url</td>
 			<td>$cell6</td>
 			<td>$description</td>
