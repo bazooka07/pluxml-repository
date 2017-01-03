@@ -16,7 +16,10 @@
  * */
 
 if (! class_exists('ZipArchive')) {
-	header('HTTP1/1 501 Classe ZipArchive introuvable sur le serveur pour les scripts PHP');
+	$message = 'Class ZipArchive is missing in PHP library';
+	header('HTTP/1.0 500 '.$message);
+	header('Content-type: text/plain');
+	echo $message;
 	exit;
 }
 
@@ -27,6 +30,14 @@ define('CACHE_ICONS', 'icons.bin');
 define('INFOS_FILE', 'infos.xml');
 define('INFOS_FILE_LEN', strlen(INFOS_FILE));
 define('LIFETIME', 7 * 24 * 3600); // in secondes (temps Unix) for rebuilding $cache and $cache_icons
+
+# for exporting this catalog as XML format, adjust the following constants :
+$repo = [
+	'author'=>'Jean-Pierre Pourrez',
+	'title'=>'Bazooka07',
+	'name'=>'bazooka07',
+	'description'=>'Plugins pour Pluxml'
+];
 
 $root = $_SERVER['PHP_SELF'];
 
@@ -236,6 +247,23 @@ ITEM;
 RSS_ENDS;
 }
 
+function getRepoVersion() {
+	global $cache;
+
+	foreach ($cache as $pluginName=>$versions) {
+		$result = '0';
+		foreach ($versions as $version=>$infos) {
+			list($download, $filedate, $version, $repository, $author, $site, $description, $requirements) = $infos;
+			if ($result < $filedate)
+				$result = $filedate;
+		}
+		$dt = date_create($result);
+		// We return the date of the last updated plugin
+		$result = $dt->format('ymdHi');
+	}
+	return $result;
+}
+
 if (! is_dir(FOLDER))
 	mkdir(FOLDER);
 
@@ -291,8 +319,9 @@ if ($files = scandir(FOLDER)) {
 
 $displayAll = (isset($_GET['all_versions']));
 
+# parsing the parameters of the url
 if (! empty($_GET) and !isset($_GET['all_versions'])) {
-	$result = 'Not found';
+	$result = 'What did you expected ?';
 	if (isset($cache)) {
 		if (isset($_GET['plugin'])) {
 	        $pluginName = $_GET['plugin'];
@@ -347,6 +376,66 @@ if (! empty($_GET) and !isset($_GET['all_versions'])) {
 			// Look for the last version of each plugin
 			sendRSS($cache, $cache_icons);
 		    exit;
+		} else if (isset($_GET['lastUpdated'])) {
+			// We return the date of the last updated plugin
+			$result = getRepoVersion();
+		} if (isset($_GET['xml'])) {
+			header('Content-Type: text/xml');
+			$url_base = 'http://'.$_SERVER['HTTP_HOST'];
+			$repo_version = getRepoVersion();
+			if (isset($repo['icon'])) {
+				$icon = $repo['icon'];
+			} elseif (is_readable('icon.png')) {
+				$icon = $url_base.dirname($root).'/icon.png';
+			} else {
+				$icon = '';
+			}
+			echo <<< BEGIN_XML
+<?xml version="1.0" encoding="UTF-8"?>
+<document>
+BEGIN_XML;
+			echo <<< XML_PLUS
+	<repo>
+		<repo_title>${repo['title']}</repo_title>
+		<repo_author>${repo['author']}</repo_author>
+		<repo_url>$url_base$root?xml</repo_url>
+		<repo_version_url>$url_base$root?lastUpdated</repo_version_url>
+		<repo_version>$repo_version</repo_version>
+		<repo_site>$url_base</repo_site>
+		<repo_description>![CDATA[${repo['description']}]]</repo_description>
+		<repo_name>${repo['name']}</repo_name>
+		<repo_icon>$icon</repo_icon>
+	</repo>
+XML_PLUS;
+			foreach ($cache as $pluginName=>$versions) {
+				foreach ($versions as $version=>$infos) {
+					list($download, $filedate, $version, $repository, $author, $site, $description, $requirements) = $infos;
+					$filedate = substr($filedate, 0, 10);
+					$filename = $url_base.dirname($root).'/'.$download;
+					$name = basename($download);
+					break;
+				}
+			$icon = $url_base.$root.'?plugin='.$pluginName.'&amp;icon';
+			echo <<< PLUGIN
+
+	<plugin>
+		<title>$pluginName</title>
+		<author>$author</author>
+		<version>$version</version>
+		<date>$filedate</date>
+		<site>$site</site>
+		<description>![CDATA[$description]]</description>
+		<name>$name</name>
+		<file>$filename</file>
+		<icon>$icon</icon>
+	</plugin>
+PLUGIN;
+			}
+			echo <<< END_XML
+
+</document>
+END_XML;
+			exit;
 		}
 	}
     header('Content-Type: text/plain');
@@ -363,7 +452,7 @@ function download_source() {
 <html lang="fr">
 <head>
 <meta http-equiv="content-type" content="text/html;charset=utf-8" />
-<title>Dépôt de plugins pour Pluxml</title>
+<title>{$repo['description']}</title>
 </head>
 <body>
 <p>
@@ -384,13 +473,15 @@ INFOS;
 
 $query_versions = ($displayAll) ? '': '?all_versions';
 $label_versions = ($displayAll) ? 'la dernière version seulement' : 'toutes les versions';
+
 ?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
 	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="fr" lang="fr">
 <head>
-	<title>Dépôt de plugins pour Pluxml</title>
+	<title><?php echo $repo['description']; ?></title>
 	<meta http-equiv="content-type" content="text/html;charset=utf-8" />
+	<link rel="icon" type="image/png" href="<?php echo dirname($root); ?>/icon.png" />
 	<link rel="alternate" type="application/rss+xml" href="<?php echo $root; ?>?rss" title="Dépôt de plugins pour Pluxml" />
 	<style>
 		body {font: 1em; font-family: droid, arial, georgia,sans-serif; color: #000; background-color: rgba(214, 215, 200, 0.8);}
@@ -482,7 +573,7 @@ $label_versions = ($displayAll) ? 'la dernière version seulement' : 'toutes les
 <?php
 if (isset($cache)) {
 	// Now, let's play : on génére le contenu HTML
-	$zip = new ZipArchive();
+	// $zip = new ZipArchive();
 	foreach ($cache as $pluginName=>$versions) {
 		$firstRow = true;
 		foreach ($versions as $version=>$infos) {
@@ -550,7 +641,9 @@ VERSION;
 		<li><strong><?php echo $root; ?>?plugin=xxxxxx&amp;download</strong> télécharge la dernière version du plugin xxxxxx</li>
 		<li><strong><?php echo $root; ?>?plugin=xxxxxx&amp;infos</strong> renvoie les infos du plugin xxxxxx au format XML</li>
 		<li><strong><?php echo $root; ?>?plugin=xxxxxx&amp;icon</strong> renvoie l'icône du plugin xxxxxx</li>
-		<li><strong><?php echo $root; ?>?json</strong> renvoie toutes les infos des plugins pour toutes les versions au format JSON (<a href="<?php echo $root; ?>?json" target="_blank">Catalogue</a>)</li>
+		<li><strong><?php echo $root; ?>?json</strong> renvoie toutes les infos des plugins pour toutes les versions au format JSON (<a href="<?php echo $root; ?>?json" target="_blank">Catalogue au format JSON</a>)</li>
+		<li><strong><?php echo $root; ?>?xml</strong> renvoie les infos de la dernière version de chaque plugin au format XML (<a href="<?php echo $root; ?>?xml" target="_blank">Catalogue au format XML</a>)</li>
+		<li><strong><?php echo $root; ?>?lastUpdated</strong> renvoie la date du plugin le plus récent mis en ligne (<a href="<?php echo $root; ?>?lastUpdated" target="_blank">Version du catalogue</a>)</li>
 		<li><strong><?php echo $root; ?>?rss</strong> Récupère le flux RSS des 10 dernières mises à jour (<a href="<?php echo $root; ?>?rss" target="_blank">RSS</a>)</li>
 	</ul>
 </body>
