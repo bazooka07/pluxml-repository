@@ -402,7 +402,7 @@ BEGIN_XML;
 		<repo_version_url>$url_base$root?lastUpdated</repo_version_url>
 		<repo_version>$repo_version</repo_version>
 		<repo_site>$url_base</repo_site>
-		<repo_description>![CDATA[${repo['description']}]]</repo_description>
+		<repo_description><![CDATA[${repo['description']}]]></repo_description>
 		<repo_name>${repo['name']}</repo_name>
 		<repo_icon>$icon</repo_icon>
 	</repo>
@@ -424,7 +424,7 @@ XML_PLUS;
 		<version>$version</version>
 		<date>$filedate</date>
 		<site>$site</site>
-		<description>![CDATA[$description]]</description>
+		<description><![CDATA[$description]]></description>
 		<name>$name</name>
 		<file>$filename</file>
 		<icon>$icon</icon>
