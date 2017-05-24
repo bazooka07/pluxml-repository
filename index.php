@@ -9,7 +9,7 @@
  * Ajustez la constante FOLDER selon vos désirs.
  *
  * @author Jean-Pierre Pourrez
- * @version 2015-10-30 - gère les multiples versions des plugins et génére un cache
+ * @version 2017-05-23 - gère les multiples versions des plugins et génére un cache
  * @license GNU General Public License, version 3
  * @see http://www.pluxml.org
  *
@@ -275,6 +275,37 @@ foreach ($caches as $file1) {
 		unlink($file1);
 }
 
+function callbackRequest($callback) {
+	global $cache;
+
+    $lines = array();
+	foreach ($cache as $pluginName=>$versions) {
+		list($download, $filedate, $version, $repository, $author, $site, $description, $requirements) = $versions[array_keys($versions)[0]];
+		$lines[] = <<< EOT
+$pluginName: { url: '$download', filedate: '$filedate', version: '$version', author: '$author', description: '$description' }
+EOT;
+				}
+    $plugins = implode(",\n\t\t", $lines);
+    $repo = ((isset($_SERVER['HTTPS']) and !empty($_SERVER['HTTPS'])) ? 'https//' : 'http://').$_SERVER['HTTP_HOST'];
+    if($_SERVER['SERVER_PORT'] != '80') { $repo .= ':'.$_SERVER['SERVER_PORT']; }
+    $url_base = preg_replace('@[^/]*\.php$@', '', $_SERVER['PHP_SELF']);
+
+	header('Cache-Control: max-age=3600');
+    header('Content-Type: application/javascript; charset=utf-8');
+    echo <<< EOT
+/* ----- Bazooka's repository @ $repo$url_base ----- */
+
+$callback({
+	repo: '$repo',
+	url_base: '$url_base',
+	plugins: [
+		$plugins
+	]
+});
+EOT;
+
+}
+
 if ($files = scandir(FOLDER)) {
 	/*
 	 * $cache contient la liste des plugins et de leurs différentes versions
@@ -320,7 +351,7 @@ if ($files = scandir(FOLDER)) {
 $displayAll = (isset($_GET['all_versions']));
 
 # parsing the parameters of the url
-if (! empty($_GET) and !isset($_GET['all_versions'])) {
+if (! empty($_GET) and !isset($_GET['all_versions']) and !isset($_GET['grille'])) {
 	$result = 'What did you expected ?';
 	if (isset($cache)) {
 		if (isset($_GET['plugin'])) {
@@ -372,6 +403,15 @@ if (! empty($_GET) and !isset($_GET['all_versions'])) {
 		    header('Content-Type: application/json');
 			echo json_encode($cache);
 			exit;
+		} if (isset($_GET['callback'])) {
+			$callback = filter_input(INPUT_GET, 'callback', FILTER_SANITIZE_STRING);
+			if(strlen(trim($callback)) > 0) {
+				callbackRequest($callback);
+			} else {
+			    header('Content-Type: text/plain; charset=utf-8');
+			    echo 'Callback function is missing';
+			}
+		    exit;
 	    } else if (isset($_GET['rss'])) { // envoi flux RSS des 10 dernières nouveautés
 			// Look for the last version of each plugin
 			sendRSS($cache, $cache_icons);
@@ -471,7 +511,10 @@ INFOS;
 	echo 'http://'.$_SERVER['HTTP_HOST'].dirname($_SERVER['SCRIPT_NAME']).'/'.$filename;
 }
 
-$query_versions = ($displayAll) ? '': '?all_versions';
+$params = array();
+if(!$displayAll) $params[] = 'all_versions';
+if(isset($_GET['grille'])) $params[] = 'grille';
+$query_versions = (!empty($params)) ? '?'.implode('&', $params) : '';
 $label_versions = ($displayAll) ? 'la dernière version seulement' : 'toutes les versions';
 
 ?>
@@ -483,22 +526,34 @@ $label_versions = ($displayAll) ? 'la dernière version seulement' : 'toutes les
 	<meta http-equiv="content-type" content="text/html;charset=utf-8" />
 	<link rel="icon" type="image/png" href="<?php echo dirname($root); ?>/icon.png" />
 	<link rel="alternate" type="application/rss+xml" href="<?php echo $root; ?>?rss" title="Dépôt de plugins pour Pluxml" />
-	<style>
-		body {font: 1em; font-family: droid, arial, georgia,sans-serif; color: #000; background-color: rgba(214, 215, 200, 0.8);}
-		#bandeau {display: flex; max-width: 900px; margin: 1em auto; padding: 0;}
-		h1, h2, h3 {text-align: center;}
+	<style type="text/css">
+		body { margin: 0; padding: 0; font: 1em; font-family: droid, arial, georgia,sans-serif; color: #000; background-color: #ebeff2;
+			/* background-image: url('hip-square.png'); */
+			background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAALCAYAAACprHcmAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH4QUYBxwZy9JxnwAAANpJREFUGNMt0DGOFFEQBNGX1S2BhMH974cLEhbDbv9KjMFLI9KIyK+fP3rfI6c+f79c37/JjJ7DIhdzUJPe9mF3nefIfuo5JuQavZagYwJqT0UlNam15BHImNSdvI9P2YzTEautBq0Mp9yeD+3q67GvD+fPyB12pNUrItq45xqd2z03T11fv+jFXTLjKB3mdtfQ6uAeM2NbW/Lfo6mexySRVLc8j+yRxiZaiLTSuoVOzFWdMQnXG5p4iwqH0ZFedjlbZ6stlgzG9D3nOX8dZMf1Ruy7OFu6amn9A9efm50CFFfrAAAAAElFTkSuQmCC');
+		}
+		#bandeau {display: flex; justify-content: center; margin: 0; padding: 0.5rem 0; position: sticky; top: 0; background-color: #ddd; }
+		h1, h2, h3, h4, h5 {text-align: center;}
 		h3 {margin: 0.5em 0;}
 		h3 + p {margin:0; padding:0; text-align: center; font-style: italic;}
 		h3 + p a {padding: 0 10px;}
+		.txt-center { text-align: center; text-indent: 0; }
 		#bandeau h2 {margin: 0;}
 		#bandeau a {text-decoration: none;}
-		#bandeau div:nth-of-type(2) {margin: auto; padding: 0;}
+		#bandeau div {padding: 0; text-align: center; }
+		#bandeau div:last-of-type { line-height: 135%;}
+		#bandeau h2, #bandeau h1 { padding: 0 1rem; }
+		#bandeau label { cursor: pointer; }
 		#logo  {display: inline-block; width: 104px; height: 82px;}
 		p:last-of-type, #detail + p {text-align: center;}
 		h1 {margin-top: 0;}
 		h1 + p {margin-bottom: 0;}
-		a {padding: 0 4px;}
-		a:hover {color: #FFF; background-color: green;}
+		label, a {padding: 0 4px;}
+		label:hover, a:hover {color: #FFF; background-color: green;}
+		.url-help {
+			max-width: 50rem;
+			margin: 0 auto;
+			padding: 1rem 0;
+		}
 		#detail {width: 99%; background-color: #FFF; border: 1px solid #A99; margin: 5px auto; border-spacing: 0;}
 		#detail thead {background-color: #C2C2A6; }
 		#detail th {padding: 5px 2px;}
@@ -515,7 +570,7 @@ $label_versions = ($displayAll) ? 'la dernière version seulement' : 'toutes les
 		#bandeau a img, #detail a img, #detail td:first-of-type span {border: 2px solid transparent;}
 		#bandeau a img:hover, #detail a img:hover, #detail td:first-of-type span:hover {border-color: green;}
 		#help_nav {display: none;}
-		#help_nav + div {display:none; position: absolute; top: 10em; right: 10%; width: 400px; margin:0; padding: 10px; background-color: #DFF5F1; border: 1px solid #4B7A9C; border-radius: 5px; text-align: justify; z-index: 10;}
+		#help_nav + div {display:none; position: fixed; top: 10em; right: 10%; width: 400px; margin:0; padding: 10px; background-color: #DFF5F1; border: 1px solid #4B7A9C; border-radius: 5px; text-align: justify; z-index: 10;}
 		#help_nav:checked + div {display: block;}
 		#help_nav + div ul {padding-left: 1em;}
 		#help_nav + div + table #help::before {display: inline-block; width: 75px; text-align: right; content: 'Afficher'}
@@ -531,33 +586,141 @@ $label_versions = ($displayAll) ? 'la dernière version seulement' : 'toutes les
 		.first td {border-top: 2px solid #A99;}
 		.rss {margin: 0; padding: 0}
 		.rss:hover {background-color: inherit;}
+
+
+		#catalogue { display: flex; justify-content: center; flex-wrap: wrap;}
+		#catalogue p { margin: 0.3rem 0; }
+		#catalogue h4 { text-align: center;}
+		#catalogue .plugin {
+			display: flex;
+			flex-direction: column;
+			width: 18rem;
+			margin: 0.5rem;
+			padding: 0;
+			background-color: #fff;
+			border: none;
+			box-shadow: 4px 4px 3px #aaa;
+			border-radius: 0.5rem;
+		}
+		#catalogue h4 {
+			margin: 0;
+			padding: 0;
+			background-color: #556;
+			color: orange;
+			letter-spacing: 0.2rem;
+		}
+		#catalogue h5 {
+			margin: 0;
+			background-color: orange;
+		}
+		#catalogue h4 a {
+			display: inline-block;
+			width: 100%;
+			margin: 0;
+			padding: 0.3rem 0;
+			color: orange;
+			text-decoration: none;
+		}
+		#catalogue h4 a:hover {
+			color: #fff;
+		}
+		#catalogue .plugin span {
+			display: inline-block;
+			width: 4rem;
+			text-align: right;
+			margin-right: 0.5rem;
+			font-style: italic;
+			color: #aaa;
+		}
+		#catalogue .descr {
+			flex-grow: 1;
+			text-align: justify;
+			text-indent: 1rem;
+			padding: 0 0.5rem;
+			font-family: "Skolar Regular","Roboto Slab","Droid Serif",Cambria,Georgia,"Times New Roman",Times,serif;
+			font-size: 120%;
+		}
+		#catalogue .descr.no-indent {
+			text-indent: 0;
+		}
+		#catalogue .descr img {
+			float: left;
+			margin: 0 0.5rem 0 0;
+		}
+		#catalogue .descr a {
+			padding: 0;
+		}
 	</style>
 </head>
 <body>
 	<div id="bandeau">
-		<div>
-			<img id="logo" src="data:image/png;base64,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" alt="Logo du site" />
+		<div style="width: 110px;">
+			<a href="http://www.pluxml.org" target="_blank" title="Le site de PluXml"><img id="logo" src="data:image/png;base64,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" alt="Logo du site" /></a>
 		</div>
 		<div>
-			<h1>Dépôt&nbsp;de&nbsp;plugins multi-versions pour&nbsp;Pluxml</h1>
-			<h2><a href="http://www.pluxml.org" target="_blank">Le site de PluXml</a></h2>
+			<h1>Dépôt&nbsp;de plugins multi-versions pour&nbsp;Pluxml</h1>
+			<h2>Welcome at Bazooka's&nbsp;repository and get the&nbsp;finest&nbsp;addons for&nbsp;PluXml</h2>
 		</div>
-		<h2><a class="rss" href="<?php echo $root; ?>?rss" target="_blank"><img width="32" height="32" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAABSlBMVEVMaXEFBgauRgCeQAEFBgaUPAGoRAAFBgYFBgatRQCuRgCtRQD/+vT/nCr/niv/rkL/myn/qz7/mijmeAr/pzjcbAD/ny3/ojHxhRf88eTleQz/ozPddA3lew//qjz/r0T/oC7/qDr/pjbmdwr10q//oS//sEX/ozb/sUf/rUD+9+7fexr0iRvuuIL0kyb659OuRgD0z6n/skjgfR3ebwPshRjsgBL2jR7hcwf5mSvhgSPlk0LqgBPyx5vqfRH21rbkjjv00az/s0ntiBz3libeeBX7ojb/pDTedhHsrW70jBz/+/Xonlb7lSX7lCTkdgr22Lj/+vXsghX+9OrjijPts3n4kyTpoVrFXw3+libuqlTyih3CZRr/t1DppGD8njDwv4/3tVjpghb/+fL98ub11LL54cnvvIr43sXzmC7ujCHqqGf/xWr769ogWgLMAAAADHRSTlMAGcmIA5XvIAzoYH8uwYRVAAACFklEQVR4XoXM1ZIbMRBAUS/G3pWGGczMzAzLzMxB+P/XtBQ7DtRU7ktPa061y+VaW8w7tLjmgtbvbr45dHO3DsDzfD906P7ZAyA/LBbjUZ/PF40X/26YJyAej36264cvXzZYQH9GQTTK2r3cp855sz4i5vco8PkS8i4tl0lVNljWN48CluUJoCUz1ohPsL+iIJHg7fDuLH3vZYNPzKKA571Z+6y1fTQlGTvr5adR4PV6A1IjOzIm2zoVAysb8P6MgkAgIEkx6LFiZV6J6JUbUoBGgSQFs0bdvn2MxRrtPj3S6caCEomCYNA0ernC5aTdUNVKM3cMXVbMIImCzU1VJo/Jp60Tf0Rr6vCtpy7MTYgC01SN8DFJb7UV/0krCZ+drt+EKFDVSM1o7g0QQq8PbYapZshXaT+iqioFkUhEUQ5uxbMP8N46wftbOoiPVQV+UOCHFIwFzXqP0NvkAle3AegyB+8UKIrC1AxZTKctuPHU5a6tUxD9GqMoFDAMTqcKyUJK084QSm7tC6EBgPMqZpgp4EJwHB0dXosFhB40QfsK6yDEzUGZ3EzKgraHUEEUan1Yc3XhnwvCQQqh72XhoATraXkOcLoURuFSGnMhmAbmxDCCyc0AiB1RFncwTEM2djAZZM4AERzHYTIxhzFZBYHsFHjGjGNjD4ClK0cxvloC4F5ZzTu0uuIGsOxeeOfQgnvZ9d9+ABtblsTZgILxAAAAAElFTkSuQmCC" alt="Flux RSS" /></a></h2>
+		<div>
+			<a class="rss" href="<?php echo $root; ?>?rss" target="_blank"><img width="32" height="32" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAABSlBMVEVMaXEFBgauRgCeQAEFBgaUPAGoRAAFBgYFBgatRQCuRgCtRQD/+vT/nCr/niv/rkL/myn/qz7/mijmeAr/pzjcbAD/ny3/ojHxhRf88eTleQz/ozPddA3lew//qjz/r0T/oC7/qDr/pjbmdwr10q//oS//sEX/ozb/sUf/rUD+9+7fexr0iRvuuIL0kyb659OuRgD0z6n/skjgfR3ebwPshRjsgBL2jR7hcwf5mSvhgSPlk0LqgBPyx5vqfRH21rbkjjv00az/s0ntiBz3libeeBX7ojb/pDTedhHsrW70jBz/+/Xonlb7lSX7lCTkdgr22Lj/+vXsghX+9OrjijPts3n4kyTpoVrFXw3+libuqlTyih3CZRr/t1DppGD8njDwv4/3tVjpghb/+fL98ub11LL54cnvvIr43sXzmC7ujCHqqGf/xWr769ogWgLMAAAADHRSTlMAGcmIA5XvIAzoYH8uwYRVAAACFklEQVR4XoXM1ZIbMRBAUS/G3pWGGczMzAzLzMxB+P/XtBQ7DtRU7ktPa061y+VaW8w7tLjmgtbvbr45dHO3DsDzfD906P7ZAyA/LBbjUZ/PF40X/26YJyAej36264cvXzZYQH9GQTTK2r3cp855sz4i5vco8PkS8i4tl0lVNljWN48CluUJoCUz1ohPsL+iIJHg7fDuLH3vZYNPzKKA571Z+6y1fTQlGTvr5adR4PV6A1IjOzIm2zoVAysb8P6MgkAgIEkx6LFiZV6J6JUbUoBGgSQFs0bdvn2MxRrtPj3S6caCEomCYNA0ernC5aTdUNVKM3cMXVbMIImCzU1VJo/Jp60Tf0Rr6vCtpy7MTYgC01SN8DFJb7UV/0krCZ+drt+EKFDVSM1o7g0QQq8PbYapZshXaT+iqioFkUhEUQ5uxbMP8N46wftbOoiPVQV+UOCHFIwFzXqP0NvkAle3AegyB+8UKIrC1AxZTKctuPHU5a6tUxD9GqMoFDAMTqcKyUJK084QSm7tC6EBgPMqZpgp4EJwHB0dXosFhB40QfsK6yDEzUGZ3EzKgraHUEEUan1Yc3XhnwvCQQqh72XhoATraXkOcLoURuFSGnMhmAbmxDCCyc0AiB1RFncwTEM2djAZZM4AERzHYTIxhzFZBYHsFHjGjGNjD4ClK0cxvloC4F5ZzTu0uuIGsOxeeOfQgnvZ9d9+ABtblsTZgILxAAAAAElFTkSuQmCC" alt="Flux RSS" /></a><br />
+			<label for="help_nav" style="margin-top: 1rem;">Aide</label><br />
+			<a href="index.php<?php if(!isset($_GET['grille'])) echo '?grille'; ?>">Grille</a>
+		</div>
 	</div>
 	<input id="help_nav" type="checkbox" />
 	<div>
 		<h3>Aide</h3>
 		<ul>
-			<li>Télécharger l'archive</li>
+			<li>Télécharger l'archive zip du plugin</li>
 			<li>Dézipper l'archive dans le dossier des plugins de Pluxml</li>
 			<li>Un nouveau dossier a été créé. Vérifier qu'il a exactement le même nom que le plugin. Sinon renommer-le.</li>
 			<li>Ensuite, se connecter sur l'administration de Pluxml pour activer le plugin</li>
 		</ul>
 	</div>
-	<h3>Liste des plugins disponibles</h3>
-	<p>
+	<p class="txt-center">
 		<a href="index.php<?php echo $query_versions; ?>">Afficher <?php echo $label_versions; ?></a>
 	</p>
+<?php
+if(!isset($_GET['grille']) and !$displayAll) {
+?>
+	<div id="catalogue">
+<?php
+if (isset($cache)) {
+	foreach ($cache as $pluginName=>$versions) { // on boucle sur tous les plugins
+		$latestVersion = array_keys($versions)[0];
+		list($download, $filedate, $version, $repository, $author, $site, $description, $requirements) = $versions[$latestVersion];
+		$filedate = substr($filedate, 0, 10);
+		// $filename = basename($download);
+		$site1 = (trim($site) !== '') ? "\n".'<p><span>Site:</span><a href="'.$site.'">'.$site.'</a></p>' : '';
+		$href = $root.'?plugin='.$pluginName.'&download';
+		$cell1 = '';
+		$indent = '';
+		if (array_key_exists($pluginName, $cache_icons)) {
+			// list($imageType, $content) = $cache_icons[$pluginName];
+			// list($filedateEpoc, $imageType, $content) = $cache_icons[$pluginName];
+			list($filedateEpoc, $imageType, $sizeIcon, $content) = $cache_icons[$pluginName];
+			$cell1 = '<a href="'.$href.'">'.'<img src="data:image/x-icon;base64,'.base64_encode($content).'" alt="Icône" />'.'</a>';
+			$indent = ' no-indent';
+		}
+		echo <<< EOT
+			<div class="plugin">
+				<h4><a href="$href">$pluginName</a></h4>
+				<p><span>Auteur:</span>$author</p>
+				<p><span>Version:</span>$version</p>
+				<p><span>Date:</span>$filedate</p>$site1
+				<p class="descr$indent">$cell1 $description</p>
+				<h5>Cliquez sur le titre pour télécharger le plugin</h5>
+			</div>
+
+EOT;
+	}
+} else { ?>
+		<p>Le dépôt ne contient aucun plugin.</p>
+<?php } ?>
+	</div>
+<?php
+} else { // début mode grille
+?>
 	<table id="detail"> <!-- catalogue starts here -->
 		<thead>
 			<tr>
@@ -583,6 +746,7 @@ if (isset($cache)) {
             $filename = basename($download); ?>
 	    <tr<?php echo ($displayAll and $firstRow) ? ' class="first"' : ''; ?>>
 <?php
+
 			if ($firstRow) {
 				// get the icon plugin
 				$cell1 = '<span class="missing">&nbsp;</span>';
@@ -606,7 +770,7 @@ if (isset($cache)) {
 			<td>$cell1</td>
 			<td><strong>$cell2</strong></td>
 			<td>$cell4</td>
-			<td><a href="$download" download>$filename</a></td>
+			<td><a href="$download">$filename</a></td>
 			<td>$url</td>
 			<td>$cell6</td>
 			<td>$description</td>
@@ -629,22 +793,26 @@ VERSION;
 <?php } ?>
 		</tbody>
 	</table> <!-- catalogue ends here -->
+<?php
+} // fin mode grille
+?>
 	<p>
 		Lovely designed by theirs authors -
 		<a href="<?php download_source(); ?>">Download source of this page</a>
 		version <?php echo VERSION; ?> -
 		Php <?php echo PHP_VERSION; ?>
 	</p>
-	<h3>Paramètres de l'url</h3>
-	<ul>
+	<h3>Paramètres de l'url :</h3>
+	<ul class="url-help">
 		<li><strong><?php echo $root; ?>?plugin=xxxxxx</strong> renvoie le numéro de version du plugin xxxxxx au format texte</li>
 		<li><strong><?php echo $root; ?>?plugin=xxxxxx&amp;download</strong> télécharge la dernière version du plugin xxxxxx</li>
 		<li><strong><?php echo $root; ?>?plugin=xxxxxx&amp;infos</strong> renvoie les infos du plugin xxxxxx au format XML</li>
 		<li><strong><?php echo $root; ?>?plugin=xxxxxx&amp;icon</strong> renvoie l'icône du plugin xxxxxx</li>
-		<li><strong><?php echo $root; ?>?json</strong> renvoie toutes les infos des plugins pour toutes les versions au format JSON (<a href="<?php echo $root; ?>?json" target="_blank">Catalogue au format JSON</a>)</li>
-		<li><strong><?php echo $root; ?>?xml</strong> renvoie les infos de la dernière version de chaque plugin au format XML (<a href="<?php echo $root; ?>?xml" target="_blank">Catalogue au format XML</a>)</li>
-		<li><strong><?php echo $root; ?>?lastUpdated</strong> renvoie la date du plugin le plus récent mis en ligne (<a href="<?php echo $root; ?>?lastUpdated" target="_blank">Version du catalogue</a>)</li>
-		<li><strong><?php echo $root; ?>?rss</strong> Récupère le flux RSS des 10 dernières mises à jour (<a href="<?php echo $root; ?>?rss" target="_blank">RSS</a>)</li>
+		<li><strong><?php echo $root; ?>?json</strong> renvoie les infos pour <a href="<?php echo $root; ?>?json" target="_blank">toutes les versions des plugins au format JSON</a></li>
+		<li><strong><?php echo $root; ?>?callback=xxx</strong> renvoie les infos de la dernière version de chaque plugin au format JSON <em>avec rappel de la fonction xxx (JSONP)</em></li>
+		<li><strong><?php echo $root; ?>?xml</strong> renvoie les infos de la <a href="<?php echo $root; ?>?xml" target="_blank">dernière version de chaque plugin au format XML</a></li>
+		<li><strong><?php echo $root; ?>?lastUpdated</strong> renvoie la <a href="<?php echo $root; ?>?lastUpdated" target="_blank">date du plugin le plus récent mis en ligne</a></li>
+		<li><strong><?php echo $root; ?>?rss</strong> Récupère le <a href="<?php echo $root; ?>?rss" target="_blank">flux RSS des 10 dernières mises à jour</a></li>
 	</ul>
 </body>
 </html>
