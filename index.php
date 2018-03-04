@@ -344,18 +344,18 @@ if($files = glob(trim(FOLDER, '/').'/*.zip')) {
 			if(file_put_contents(CACHE_FILE, json_encode($cache), LOCK_EX) === false)
 				$error = 'Pas de droit en écriture sur le disque dur<br />Contactez votre webmaster.';
 			else
-				// file_put_contents(CACHE_ICONS, json_encode($cache_icons), LOCK_EX);
 				file_put_contents(CACHE_ICONS, serialize($cache_icons), LOCK_EX);
 		} else
             unset($cache);
 	} else {
 		$cache = json_decode(file_get_contents(CACHE_FILE), true);
-		// $cache_icons = json_decode(file_get_contents(CACHE_ICONS), true);
 		$cache_icons = unserialize(file_get_contents(CACHE_ICONS));
 	}
 }
 
 $displayAll = (isset($_GET['all_versions']));
+header("Cache-Control: public");
+header("Expires: ".date('r', filemtime(CACHE_FILE) + 86400)); // 24 heures
 
 /* ----------------- Parsing the parameters of the url --------------------- */
 if(!empty($_GET) and !isset($_GET['all_versions']) and !isset($_GET['grille'])) {
@@ -524,8 +524,6 @@ if(isset($_GET['grille'])) $params[] = 'grille';
 $query_versions = (!empty($params)) ? '?'.implode('&', $params) : '';
 $label_versions = ($displayAll) ? 'la dernière version seulement' : 'toutes les versions';
 
-header("Cache-Control: public");
-header("Expires: ".date('r', filemtime(CACHE_FILE) + LIFETIME));
 ?>
 
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
