@@ -9,13 +9,13 @@
  * Ajustez la constante FOLDER selon vos désirs.
  *
  * @author Jean-Pierre Pourrez
- * @version 2017-05-23 - gère les multiples versions des plugins et génére un cache
+ * @version 2018-03-04 - gère les multiples versions des plugins et génére un cache
  * @license GNU General Public License, version 3
  * @see http://www.pluxml.org
  *
  * */
 
-if (! class_exists('ZipArchive')) {
+if(! class_exists('ZipArchive')) {
 	$message = 'Class ZipArchive is missing in PHP library';
 	header('HTTP/1.0 500 '.$message);
 	header('Content-type: text/plain');
@@ -24,12 +24,14 @@ if (! class_exists('ZipArchive')) {
 }
 
 define('VERSION', date('Y-m-d', filemtime(__FILE__)));
-define('FOLDER', 'plugins');
-define('CACHE_FILE', 'cache.json');
-define('CACHE_ICONS', 'icons.bin');
-define('INFOS_FILE', 'infos.xml');
+const FOLDER = 'plugins';
+const WORKDIR = 'workdir/';
+const CACHE_FILE = WORKDIR.'cache.json';
+const CACHE_ICONS = WORKDIR.'icons.bin';
+const LIFETIME = 7 * 24 * 3600; // in secondes (temps Unix) for rebuilding $cache and $cache_icons
+
+const INFOS_FILE = 'infos.xml';
 define('INFOS_FILE_LEN', strlen(INFOS_FILE));
-define('LIFETIME', 7 * 24 * 3600); // in secondes (temps Unix) for rebuilding $cache and $cache_icons
 
 # for exporting this catalog as XML format, adjust the following constants :
 $repo = [
@@ -39,36 +41,40 @@ $repo = [
 	'description'=>'Plugins pour Pluxml'
 ];
 
-$root = $_SERVER['PHP_SELF'];
+$root = filter_input(INPUT_SERVER, 'PHP_SELF', FILTER_SANITIZE_STRING);
 
 /*
  * Vérifie si le cache a besoin d'une mise à jour
  * On ne fait la mise à jour que toutes les LIFETIME minutes
  * */
-function needs_update() {
-	$result = false;
-	if (! file_exists(CACHE_FILE) or ! file_exists(CACHE_ICONS))
-		$result = true;
+function needs_update(&$zipsList) {
+	foreach(array(FOLDER, WORKDIR) as $dir1) {
+		if(!is_dir($dir1) and !mkdir($dir1, 0750, true)) {
+			header('Content-Type: text/plain;charset=uft-8');
+			$dir1 = trim($dir1, '/');
+			printf("Unable to create %s/$dir1 folder.", __DIR__) ;
+			exit;
+		}
+	}
+
+	if(!file_exists(CACHE_FILE) or !file_exists(CACHE_ICONS))
+		return true;
 	else {
 		$refTime = filemtime(CACHE_FILE);
-		if (time() - $refTime > LIFETIME)
+		if(time() - $refTime > LIFETIME)
 			// caches are too old
-			$result = true;
+			return true;
 		else {
-			$files = scandir(FOLDER);
-			foreach ($files as $f) {
-				if (substr($f, -4) == '.zip') {
-					$filename = FOLDER.'/'.$f;
-					if ($refTime < filemtime($filename)) {
-						// one file is more recent than the cache
-						$result = true;
-						break;
-					}
+			foreach ($zipsList as $zipFile) {
+				if($refTime < filemtime($zipFile)) {
+					// one file is more recent than the cache
+					return true;
+					break;
 				}
 			}
 		}
 	}
-	return $result;
+	return false;
 }
 
 /*
@@ -78,7 +84,7 @@ function searchInfosFile(ZipArchive $zipFile) {
 	$result = false;
 	for ($i=0; $i<$zipFile->numFiles; $i++) {
 		$filename = $zipFile->getNameIndex($i);
-		if (substr($filename, - INFOS_FILE_LEN) == INFOS_FILE) {
+		if(substr($filename, - INFOS_FILE_LEN) == INFOS_FILE) {
 			$result = $filename;
 			break;
 		}
@@ -94,12 +100,12 @@ function getPluginName(ZipArchive $zipFile) {
 	$result = false;
 	for ($i=0; $i<$zipFile->numFiles; $i++) {
 		$filename = $zipFile->getNameIndex($i);
-		if (substr($filename, -4) == '.php') {
+		if(substr($filename, -4) == '.php') {
 			$content = $zipFile->getFromName($filename);
-			if (preg_match('/\bclass\s+(\w+)\s+extends\s+plxPlugin\b/', $content, $matches) === 1) {
+			if(preg_match('/\bclass\s+(\w+)\s+extends\s+plxPlugin\b/', $content, $matches) === 1) {
 				$result = $matches[1];
 				break;
-			} else if (preg_match('/^([\w-]+)\/(?:article|static[^\.]*)\.php$/', $filename, $matches) === 1) {
+			} else if(preg_match('/^([\w-]+)\/(?:article|static[^\.]*)\.php$/', $filename, $matches) === 1) {
 				// archive zip d'un théme demandé par niqnutn
 				$result = $matches[1];
 				break;
@@ -115,9 +121,9 @@ function getPluginName(ZipArchive $zipFile) {
  // not used !
 function getPluginIcon(ZipArchive $zipFile) {
 	$result = '<span class="missing">&nbsp;</span>';
-	for ($i=0; $i<$zipFile->numFiles; $i++) {
+	for($i=0; $i<$zipFile->numFiles; $i++) {
 		$filename = $zipFile->getNameIndex($i);
-		if (preg_match('#/icon\.(?:jpg|png|gif)$#', $filename)) {
+		if(preg_match('#/icon\.(?:jpg|png|gif)$#', $filename)) {
 			$src = $zipFile->getFromName($filename);
 			$result = '<img src="data:image/x-icon;base64,'.base64_encode($src).'" alt="Icône" />';
 			break;
@@ -126,54 +132,53 @@ function getPluginIcon(ZipArchive $zipFile) {
 	return $result;
 }
 
-function buildCaches(array $files) {
+function buildCaches(&$zipsList) {
 	$cache = array();
 	$cache_icons = array();
 	$zip = new ZipArchive();
-	foreach($files as $f) {
-		if (substr($f, -4) == '.zip') {
-			$name = substr($f, 0, -4);
-			$filename = FOLDER.'/'.$f;
-			$filedateEpoc = filemtime($filename);
-			$filedate = date('c', $filedateEpoc);
-			if ($res = $zip->open($filename)) {
-				if ($infoFile = searchInfosFile($zip)) {
-					$infos = $zip->getFromName($infoFile);
-					try {
-			            @$doc = new SimpleXMLElement($infos);
-			            $title = $doc->title->__toString();
-			            $author = $doc->author->__toString();
-			            $version = $doc->version->__toString();
-			            $versionOrder = intval(floatval($version) * 1000.0);
-			            $site = $doc->site->__toString();
-			            $repository = $doc->repository->__toString();
-			            $description = $doc->description->__toString();
-			            $requirements = $doc->requirements->__toString();
-			            $values = array($filename, $filedate, $version, $repository, $author, $site, $description, $requirements);
-			            $keyName = getPluginName($zip);
-			            // on vérifie si le plugin existe déjà dans le cache
-			            if (! array_key_exists($keyName, $cache))
-							$cache[$keyName] = array();
-						$cache[$keyName][$versionOrder] = $values;
-						// look for an icon
-						for ($i=0; $i<$zip->numFiles; $i++) {
-							$filenameIcon = $zip->getNameIndex($i);
-							if (preg_match('#/icon\.(jpg|png|gif)$#', $filenameIcon, $matches)) {
-								if (! array_key_exists($keyName, $cache_icons) or ($cache_icons[$keyName][1] < $filedateEpoc)) {
-									// on garde l'icone de la dernière version
-									$icon = $zip->getFromIndex($i);
-									$stats = $zip->StatIndex($i); // keys in array('name', 'index', 'crc', 'size', 'mtime', 'comp_size', ' comp_methohd');
-									$cache_icons[$keyName] = array($filedateEpoc, $matches[1], $stats['size'], $icon);
-								}
-								break;
-							}
-						}
-					} catch (Exception $e) {
-						error_log(date('Y-m-d H:i').' - fichier infos.xml incorrect pour le plugin '.$f.' - Ligne n°'.$e->getLine().': '.$e->getMessage()."\n", 3, dirname(__FILE__).'/errors.log');
+	foreach($zipsList as $filename) {
+		if($res = $zip->open($filename)) {
+			if($infoFile = searchInfosFile($zip)) {
+				$infos = $zip->getFromName($infoFile);
+				try {
+					# On parse le fichier infos.xml
+		            @$doc = new SimpleXMLElement($infos);
+		            # $title = $doc->title->__toString();
+		            $author = $doc->author->__toString();
+		            $version = $doc->version->__toString();
+		            $site = $doc->site->__toString();
+		            $repository = $doc->repository->__toString();
+		            $description = $doc->description->__toString();
+		            $requirements = $doc->requirements->__toString();
+		            # On récupère la date du fichier infos.xml
+					$infosStats = $zip->statName($infoFile);
+					$filedateEpoc = $infosStats['mtime'];
+					$filedate = date('Y-m-d', $filedateEpoc);
+		            $values = array($filename, $filedate, $version, $repository, $author, $site, $description, $requirements);
+		            $keyName = getPluginName($zip);
+		            // on vérifie si le plugin est déjà référencé dans le cache
+		            if(! array_key_exists($keyName, $cache)) {
+						$cache[$keyName] = array();
 					}
+					$cache[$keyName][$version] = $values;
+					// look for an icon
+					for ($i=0; $i<$zip->numFiles; $i++) {
+						$filenameIcon = $zip->getNameIndex($i);
+						if(preg_match('#/icon\.(jpg|png|gif)$#', $filenameIcon, $matches)) {
+							if(!array_key_exists($keyName, $cache_icons) or $cache_icons[$keyName][1] < $filedateEpoc) {
+								// on garde l'icone de la dernière version
+								$icon = $zip->getFromIndex($i);
+								$stats = $zip->StatIndex($i); // keys in array('name', 'index', 'crc', 'size', 'mtime', 'comp_size', ' comp_methohd');
+								$cache_icons[$keyName] = array($filedateEpoc, $matches[1], $stats['size'], $icon);
+							}
+							break;
+						}
+					}
+				} catch (Exception $e) {
+					error_log(date('Y-m-d H:i').' - fichier infos.xml incorrect pour le plugin '.$f.' - Ligne n°'.$e->getLine().': '.$e->getMessage()."\n", 3, dirname(__FILE__).'/errors.log');
 				}
-				$zip->close();
 			}
+			$zip->close();
 		}
 	}
 	return array($cache, $cache_icons);
@@ -217,10 +222,10 @@ RSS_STARTS;
 		$pubDate = date('r', strtotime($filedate));
 		$description = htmlspecialchars($description, ENT_COMPAT | ENT_XML1);
 		$guid = 'http://'.$hostname.$folder.'/'.$link.'_'.substr($filedate, 0, 10);
-		if (array_key_exists($pluginName, $cache_icons)) {
+		if(array_key_exists($pluginName, $cache_icons)) {
 			list($filedateEpoc, $imageType, $sizeIcon, $content) = $cache_icons[$pluginName];
 			// list($imageType, $content) = $cache_icons[$pluginName];
-			if ($imageType == 'jpg')
+			if($imageType == 'jpg')
 				$imageType = 'jpeg';
 			$length = strlen($content);
 			$enclosure = <<< ENCLOSURE
@@ -254,7 +259,7 @@ function getRepoVersion() {
 		$result = '0';
 		foreach ($versions as $version=>$infos) {
 			list($download, $filedate, $version, $repository, $author, $site, $description, $requirements) = $infos;
-			if ($result < $filedate)
+			if($result < $filedate)
 				$result = $filedate;
 		}
 		$dt = date_create($result);
@@ -264,14 +269,11 @@ function getRepoVersion() {
 	return $result;
 }
 
-if (! is_dir(FOLDER))
-	mkdir(FOLDER);
-
 // clean up caches for an update of this script
 $caches = array(CACHE_FILE, CACHE_ICONS);
 $lastUpdateProg = filemtime(__FILE__);
 foreach ($caches as $file1) {
-	if (file_exists($file1) and (filemtime($file1) < $lastUpdateProg))
+	if(file_exists($file1) and (filemtime($file1) < $lastUpdateProg))
 		unlink($file1);
 }
 
@@ -281,8 +283,10 @@ function callbackRequest($callback) {
     $lines = array();
 	foreach ($cache as $pluginName=>$versions) {
 		list($download, $filedate, $version, $repository, $author, $site, $description, $requirements) = $versions[array_keys($versions)[0]];
+		$author1 = addslashes($author);
+		$description1 = addslashes(str_replace(PHP_EOL," - ",$description));
 		$lines[] = <<< EOT
-$pluginName: { url: '$download', filedate: '$filedate', version: '$version', author: '$author', description: '$description' }
+$pluginName: { url: '$download', filedate: '$filedate', version: '$version', author: '$author1', description: '$description1' }
 EOT;
 				}
     $plugins = implode(",\n\t\t", $lines);
@@ -298,43 +302,46 @@ EOT;
 $callback({
 	repo: '$repo',
 	url_base: '$url_base',
-	plugins: [
+	plugins: {
 		$plugins
-	]
+	}
 });
 EOT;
 
 }
 
-if ($files = scandir(FOLDER)) {
+/* -------------- the core starts here ------------ */
+if($files = glob(trim(FOLDER, '/').'/*.zip')) {
 	/*
 	 * $cache contient la liste des plugins et de leurs différentes versions
 	 * C'est un tableau associatif :
 	 * la clé est le nom du plugin, ou plus exactement le nom de la classe dérivé de PlxPlugin
 	 * la valeur est un tableau associatif avec :
-	 * la clé est le numéro de version du plugin
+	 * la clé est la version du plugin
 	 * la valeur est un tableau ordinaire contenant
-	 * le nom de l'archive ($filename)
-	 * la date de l'archive ($filedate)
-	 * le numéro de version comme indiqué dans le fichier infos.xml ($version)
-	 * l'url où demander l'archive zip du plugin ($repository)
-	 * l'auteur ($author)
-	 * le site web de l'auteur ($site)
-	 * la description du plugin ($description)
-	 * les pré-requis ($requirements).
-	 * le numéro de version contenu dans infos.xml est converti en flottant à multiplier par 1000
-	 * et à convertir en entier pour trier les versions
+	 * 	le nom de l'archive ($filename)
+	 * 	la date de l'archive ($filedate)
+	 *	le numéro de version comme indiqué dans le fichier infos.xml ($version)
+	 * 	l'url où demander l'archive zip du plugin ($repository)
+	 * 	l'auteur ($author)
+	 * 	le site web de l'auteur ($site)
+	 * 	la description du plugin ($description)
+	 * 	les pré-requis ($requirements).
+	 * 	le numéro de version contenu dans infos.xml est converti en flottant à multiplier par 1000
+	 * 	et à convertir en entier pour trier les versions
 	 * */
-	if (needs_update()) {
+	if(needs_update($files)) {
 		list($cache, $cache_icons) = buildCaches($files);
 		// tri et sauvegarde du cache sur le disque dur si non vide
-		if (! empty($cache)) {
+		if(! empty($cache)) {
 			ksort($cache);
 			// tri décroissant des versions de chaque plugin
 			foreach(array_keys($cache) as $k)
-				krsort($cache[$k]);
+				uksort($cache[$k], function($a, $b) {
+					return -version_compare($a, $b);
+				});
 			// encodage et sauvegarde (il y a du javascript dans l'air)
-			if (file_put_contents(CACHE_FILE, json_encode($cache), LOCK_EX) === false)
+			if(file_put_contents(CACHE_FILE, json_encode($cache), LOCK_EX) === false)
 				$error = 'Pas de droit en écriture sur le disque dur<br />Contactez votre webmaster.';
 			else
 				// file_put_contents(CACHE_ICONS, json_encode($cache_icons), LOCK_EX);
@@ -350,21 +357,21 @@ if ($files = scandir(FOLDER)) {
 
 $displayAll = (isset($_GET['all_versions']));
 
-# parsing the parameters of the url
-if (! empty($_GET) and !isset($_GET['all_versions']) and !isset($_GET['grille'])) {
+/* ----------------- Parsing the parameters of the url --------------------- */
+if(!empty($_GET) and !isset($_GET['all_versions']) and !isset($_GET['grille'])) {
 	$result = 'What did you expected ?';
-	if (isset($cache)) {
-		if (isset($_GET['plugin'])) {
-	        $pluginName = $_GET['plugin'];
-	        if (array_key_exists($pluginName, $cache)) {
+	if(isset($cache)) {
+		if(isset($_GET['plugin'])) {
+	        $pluginName = filter_input(INPUT_GET, 'plugin', FILTER_SANITIZE_STRING);
+	        if(array_key_exists($pluginName, $cache)) {
 				$versions = $cache[$pluginName];
 				$key = array_keys($versions)[0];
 				$lastRelease = $versions[$key];
 				list($download, $filedate, $version, $repository, $author, $site, $description, $requirements) = $lastRelease;
-				if (isset($_GET['infos'])) { // envoi du contenu du fichier infos.xml du plugin
+				if(isset($_GET['infos'])) { // envoi du contenu du fichier infos.xml du plugin
 					$zip = new ZipArchive();
-					if ($res = $zip->open($download)) {
-						if ($infoFile = searchInfosFile($zip)) {
+					if($res = $zip->open($download)) {
+						if($infoFile = searchInfosFile($zip)) {
 							// send content of infos.xml
 							$result = $zip->getFromName($infoFile);
 						    header('Content-Type: text/xml');
@@ -373,17 +380,17 @@ if (! empty($_GET) and !isset($_GET['all_versions']) and !isset($_GET['grille'])
 						}
 						$zip->close();
 					}
-				} else if (isset($_GET['download'])) { // envoi l'archive zip du plugin
+				} else if(isset($_GET['download'])) { // envoi l'archive zip du plugin
 					header('Content-Type: application/zip');
 				    header('Content-Length: ' . filesize($download));
 				    header('Content-Disposition: attachment; filename="'.basename($download).'"');
 					readfile($download);
 					exit;
-				} else if (isset($_GET['icon'])) { // envoi de l'icône du plugin
-					if (array_key_exists($pluginName, $cache_icons)) {
+				} else if(isset($_GET['icon'])) { // envoi de l'icône du plugin
+					if(array_key_exists($pluginName, $cache_icons)) {
 						// list($filedateEpoc, $mimetype, $content) = $cache_icons[$pluginName];
 						list($filedateEpoc, $mimetype, $sizeIcon, $content) = $cache_icons[$pluginName];
-						if ($mimetype == 'jpg')
+						if($mimetype == 'jpg')
 							$mimetype = 'jpeg';
 						header('Content-Length: '.strlen($content));
 						header('Content-Type: image/'.$mimetype);
@@ -399,11 +406,11 @@ if (! empty($_GET) and !isset($_GET['all_versions']) and !isset($_GET['grille'])
 				}
 	        } else
 	            $result = 'unknown';
-	    } else if (isset($_GET['json'])) { // envoi du catalogue au format JSON
+	    } else if(isset($_GET['json'])) { // envoi du catalogue au format JSON
 		    header('Content-Type: application/json');
 			echo json_encode($cache);
 			exit;
-		} if (isset($_GET['callback'])) {
+		} if(isset($_GET['callback'])) {
 			$callback = filter_input(INPUT_GET, 'callback', FILTER_SANITIZE_STRING);
 			if(strlen(trim($callback)) > 0) {
 				callbackRequest($callback);
@@ -412,20 +419,20 @@ if (! empty($_GET) and !isset($_GET['all_versions']) and !isset($_GET['grille'])
 			    echo 'Callback function is missing';
 			}
 		    exit;
-	    } else if (isset($_GET['rss'])) { // envoi flux RSS des 10 dernières nouveautés
+	    } else if(isset($_GET['rss'])) { // envoi flux RSS des 10 dernières nouveautés
 			// Look for the last version of each plugin
 			sendRSS($cache, $cache_icons);
 		    exit;
-		} else if (isset($_GET['lastUpdated'])) {
+		} else if(isset($_GET['lastUpdated'])) {
 			// We return the date of the last updated plugin
 			$result = getRepoVersion();
-		} if (isset($_GET['xml'])) {
+		} if(isset($_GET['xml'])) {
 			header('Content-Type: text/xml');
 			$url_base = 'http://'.$_SERVER['HTTP_HOST'];
 			$repo_version = getRepoVersion();
-			if (isset($repo['icon'])) {
+			if(isset($repo['icon'])) {
 				$icon = $repo['icon'];
-			} elseif (is_readable('icon.png')) {
+			} elseif(is_readable('icon.png')) {
 				$icon = $url_base.dirname($root).'/icon.png';
 			} else {
 				$icon = '';
@@ -485,9 +492,9 @@ END_XML;
 
 function download_source() {
 	$filename = 'repository2-'.VERSION.'.zip';
-	if (! file_exists($filename)) {
+	if(! file_exists($filename)) {
 		$zip = new ZipArchive();
-		if ($zip->open($filename, ZipArchive::CREATE) === true) {
+		if($zip->open($filename, ZipArchive::CREATE) === true) {
 			$infos = <<< INFOS
 <html lang="fr">
 <head>
@@ -517,17 +524,21 @@ if(isset($_GET['grille'])) $params[] = 'grille';
 $query_versions = (!empty($params)) ? '?'.implode('&', $params) : '';
 $label_versions = ($displayAll) ? 'la dernière version seulement' : 'toutes les versions';
 
+header("Cache-Control: public");
+header("Expires: ".date('r', filemtime(CACHE_FILE) + LIFETIME));
 ?>
+
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
 	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="fr" lang="fr">
 <head>
-	<title><?php echo $repo['description']; ?></title>
-	<meta http-equiv="content-type" content="text/html;charset=utf-8" />
+	<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+	<meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1.0">
 	<link rel="icon" type="image/png" href="<?php echo dirname($root); ?>/icon.png" />
+	<title><?php echo $repo['description']; ?></title>
 	<link rel="alternate" type="application/rss+xml" href="<?php echo $root; ?>?rss" title="Dépôt de plugins pour Pluxml" />
 	<style type="text/css">
-		body { margin: 0; padding: 0; font: 1em; font-family: droid, arial, georgia,sans-serif; color: #000; background-color: #ebeff2;
+		body { margin: 0; padding: 0; font-family: droid, arial, georgia, sans-serif; color: #000; background-color: #ebeff2;
 			/* background-image: url('hip-square.png'); */
 			background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAALCAYAAACprHcmAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH4QUYBxwZy9JxnwAAANpJREFUGNMt0DGOFFEQBNGX1S2BhMH974cLEhbDbv9KjMFLI9KIyK+fP3rfI6c+f79c37/JjJ7DIhdzUJPe9mF3nefIfuo5JuQavZagYwJqT0UlNam15BHImNSdvI9P2YzTEautBq0Mp9yeD+3q67GvD+fPyB12pNUrItq45xqd2z03T11fv+jFXTLjKB3mdtfQ6uAeM2NbW/Lfo6mexySRVLc8j+yRxiZaiLTSuoVOzFWdMQnXG5p4iwqH0ZFedjlbZ6stlgzG9D3nOX8dZMf1Ruy7OFu6amn9A9efm50CFFfrAAAAAElFTkSuQmCC');
 		}
@@ -549,11 +560,8 @@ $label_versions = ($displayAll) ? 'la dernière version seulement' : 'toutes les
 		h1 + p {margin-bottom: 0;}
 		label, a {padding: 0 4px;}
 		label:hover, a:hover {color: #FFF; background-color: green;}
-		.url-help {
-			max-width: 50rem;
-			margin: 0 auto;
-			padding: 1rem 0;
-		}
+		.url-help { max-width: 64rem; margin: 0 auto; padding: 1rem 0; }
+		.url-help ul { padding-left: 1.5rem; margin: 0; }
 		#detail {width: 99%; background-color: #FFF; border: 1px solid #A99; margin: 5px auto; border-spacing: 0;}
 		#detail thead {background-color: #C2C2A6; }
 		#detail th {padding: 5px 2px;}
@@ -561,7 +569,8 @@ $label_versions = ($displayAll) ? 'la dernière version seulement' : 'toutes les
 		#detail tbody tr:nth-of-type(even) {background-color: #DAE7E6;}
 		#detail tbody tr:hover {background-color: #EDD780;}
 		#detail tbody td:nth-of-type(3) {text-align: right; padding-right: 5px;}
-		#detail tbody td:nth-of-type(7) {text-align: justify; padding: 0 5px;}
+		#detail tbody td:nth-of-type(7) {text-align: justify; padding: 0 5px; white-space: normal; min-width: 20rem;}
+		#detail tbody td:nth-of-type(8) {white-space: normal; }
 		#detail tbody td:last-of-type {text-align: center;}
 		#detail + p {font-style: italic; font-size: 80%;}
 		#detail .missing {display: inline-block; background: url('data:image/png;base64,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') no-repeat center center; }
@@ -650,6 +659,8 @@ $label_versions = ($displayAll) ? 'la dernière version seulement' : 'toutes les
 		#catalogue .descr a {
 			padding: 0;
 		}
+		div.scrollable-table { overflow: auto;}
+		div.scrollable-table table { white-space: nowrap; }
 	</style>
 </head>
 <body>
@@ -685,7 +696,7 @@ if(!isset($_GET['grille']) and !$displayAll) {
 ?>
 	<div id="catalogue">
 <?php
-if (isset($cache)) {
+if(isset($cache)) {
 	foreach ($cache as $pluginName=>$versions) { // on boucle sur tous les plugins
 		$latestVersion = array_keys($versions)[0];
 		list($download, $filedate, $version, $repository, $author, $site, $description, $requirements) = $versions[$latestVersion];
@@ -695,7 +706,7 @@ if (isset($cache)) {
 		$href = $root.'?plugin='.$pluginName.'&download';
 		$cell1 = '';
 		$indent = '';
-		if (array_key_exists($pluginName, $cache_icons)) {
+		if(array_key_exists($pluginName, $cache_icons)) {
 			// list($imageType, $content) = $cache_icons[$pluginName];
 			// list($filedateEpoc, $imageType, $content) = $cache_icons[$pluginName];
 			list($filedateEpoc, $imageType, $sizeIcon, $content) = $cache_icons[$pluginName];
@@ -721,36 +732,36 @@ EOT;
 <?php
 } else { // début mode grille
 ?>
-	<table id="detail"> <!-- catalogue starts here -->
-		<thead>
-			<tr>
-				<th colspan="2">Nom du plugin</th>
-				<th colspan="2" title="Version du plugin indiqué&#13;dans le fichier obligatoire&#13;infos.xml">Version / Archive</th>
-				<th title="Cliquez sur un lien&#13;pour accéder au site de l'auteur">Auteur</th>
-				<th title="Date de l'archive zip&#13;&#13;Cliquez sur le lien&#13;pour afficher le fichier&#13;infos.xml">Date</th>
-				<th title="">Description (<label for="help_nav" id="help"> l'aide</label>)</th>
-				<th>Pré-requis</th>
-			</tr>
-		</thead>
-		<tbody>
+	<div class="scrollable-table">
+		<table id="detail"> <!-- catalogue starts here -->
+			<thead>
+				<tr>
+					<th colspan="2">Nom du plugin</th>
+					<th colspan="2" title="Version du plugin indiqué&#13;dans le fichier obligatoire&#13;infos.xml">Version / Archive</th>
+					<th title="Cliquez sur un lien&#13;pour accéder au site de l'auteur">Auteur</th>
+					<th title="Date de l'archive zip&#13;&#13;Cliquez sur le lien&#13;pour afficher le fichier&#13;infos.xml">Date</th>
+					<th title="">Description (<label for="help_nav" id="help"> l'aide</label>)</th>
+					<th>Pré-requis</th>
+				</tr>
+			</thead>
+			<tbody>
 <?php
-if (isset($cache)) {
+if(isset($cache)) {
 	// Now, let's play : on génére le contenu HTML
 	// $zip = new ZipArchive();
 	foreach ($cache as $pluginName=>$versions) {
 		$firstRow = true;
 		foreach ($versions as $version=>$infos) {
 			list($download, $filedate, $version, $repository, $author, $site, $description, $requirements) = $infos;
-            $url = (strlen($site) > 0) ? '<a href="'.$site.'" target="_blank">'.$author.'</a>' : $author;
+            $url = (strlen($site) > 0) ? "<a href=\"$site\" target=\"_blank\">$author</a>" : $author;
             $filedate = substr($filedate, 0, 10);
             $filename = basename($download); ?>
-	    <tr<?php echo ($displayAll and $firstRow) ? ' class="first"' : ''; ?>>
+		    <tr<?php echo ($displayAll and $firstRow) ? ' class="first"' : ''; ?>>
 <?php
-
-			if ($firstRow) {
+			if($firstRow) {
 				// get the icon plugin
 				$cell1 = '<span class="missing">&nbsp;</span>';
-				if (array_key_exists($pluginName, $cache_icons)) {
+				if(array_key_exists($pluginName, $cache_icons)) {
 					// list($imageType, $content) = $cache_icons[$pluginName];
 					// list($filedateEpoc, $imageType, $content) = $cache_icons[$pluginName];
 					list($filedateEpoc, $imageType, $sizeIcon, $content) = $cache_icons[$pluginName];
@@ -767,52 +778,57 @@ if (isset($cache)) {
 				$cell6 = $filedate;
 			}
 			echo <<< VERSION
-			<td>$cell1</td>
-			<td><strong>$cell2</strong></td>
-			<td>$cell4</td>
-			<td><a href="$download">$filename</a></td>
-			<td>$url</td>
-			<td>$cell6</td>
-			<td>$description</td>
-			<td>$requirements</td>
-
+					<td>$cell1</td>
+					<td><strong>$cell2</strong></td>
+					<td>$cell4</td>
+					<td><a href="$download">$filename</a></td>
+					<td>$url</td>
+					<td>$cell6</td>
+					<td>$description</td>
+					<td>$requirements</td>\n
 VERSION;
 			$firstRow = false;
 ?>
 		</tr>
 <?php
-			if ($displayAll === false) {
+			if($displayAll === false) {
 				break;
 			}
 		}
 	}
 } else { ?>
-		<tr>
-			<td colspan="8" class="alert">Le dépôt ne contient aucun plugin.</td>
-		</tr>
+				<tr>
+					<td colspan="8" class="alert">Le dépôt ne contient aucun plugin.</td>
+				</tr>
 <?php } ?>
-		</tbody>
-	</table> <!-- catalogue ends here -->
+			</tbody>
+		</table> <!-- catalogue ends here -->
+	</div>
 <?php
 } // fin mode grille
 ?>
 	<p>
 		Lovely designed by theirs authors -
 		<a href="<?php download_source(); ?>">Download source of this page</a>
-		version <?php echo VERSION; ?> -
-		Php <?php echo PHP_VERSION; ?>
+		version <?php echo VERSION; ?> - Php <?php echo PHP_VERSION; ?>
 	</p>
 	<h3>Paramètres de l'url :</h3>
-	<ul class="url-help">
-		<li><strong><?php echo $root; ?>?plugin=xxxxxx</strong> renvoie le numéro de version du plugin xxxxxx au format texte</li>
-		<li><strong><?php echo $root; ?>?plugin=xxxxxx&amp;download</strong> télécharge la dernière version du plugin xxxxxx</li>
-		<li><strong><?php echo $root; ?>?plugin=xxxxxx&amp;infos</strong> renvoie les infos du plugin xxxxxx au format XML</li>
-		<li><strong><?php echo $root; ?>?plugin=xxxxxx&amp;icon</strong> renvoie l'icône du plugin xxxxxx</li>
-		<li><strong><?php echo $root; ?>?json</strong> renvoie les infos pour <a href="<?php echo $root; ?>?json" target="_blank">toutes les versions des plugins au format JSON</a></li>
-		<li><strong><?php echo $root; ?>?callback=xxx</strong> renvoie les infos de la dernière version de chaque plugin au format JSON <em>avec rappel de la fonction xxx (JSONP)</em></li>
-		<li><strong><?php echo $root; ?>?xml</strong> renvoie les infos de la <a href="<?php echo $root; ?>?xml" target="_blank">dernière version de chaque plugin au format XML</a></li>
-		<li><strong><?php echo $root; ?>?lastUpdated</strong> renvoie la <a href="<?php echo $root; ?>?lastUpdated" target="_blank">date du plugin le plus récent mis en ligne</a></li>
-		<li><strong><?php echo $root; ?>?rss</strong> Récupère le <a href="<?php echo $root; ?>?rss" target="_blank">flux RSS des 10 dernières mises à jour</a></li>
-	</ul>
+	<div class="url-help">
+		<ul>
+<?php
+	echo <<< EOT
+			<li><strong>{$root}?plugin=xxxxxx</strong> renvoie le numéro de version du plugin xxxxxx au format texte</li>
+			<li><strong>{$root}?plugin=xxxxxx&amp;download</strong> télécharge la dernière version du plugin xxxxxx</li>
+			<li><strong>{$root}?plugin=xxxxxx&amp;icon</strong> renvoie l'icône du plugin xxxxxx</li>
+			<li><strong>{$root}?json</strong> renvoie les infos pour <a href="{$root}?json" target="_blank">toutes les versions des plugins au format JSON</a></li>
+			<li><strong>{$root}?callback=myCallback</strong> renvoie les <a href="{$root}?callback=myCallback">infos de la dernière version de chaque plugin au format JSON</a> <em>avec rappel de la fonction myCallback (JSONP)</em></li>
+			<li><strong>{$root}?plugin=xxxxxx&amp;infos</strong> renvoie les infos du plugin xxxxxx au format XML</li>
+			<li><strong>{$root}?xml</strong> renvoie les infos de la <a href="{$root}?xml" target="_blank">dernière version de chaque plugin au format XML</a></li>
+			<li><strong>{$root}?lastUpdated</strong> renvoie la <a href="{$root}?lastUpdated" target="_blank">date du plugin le plus récent mis en ligne</a></li>
+			<li><strong>{$root}?rss</strong> Récupère le <a href="{$root}?rss" target="_blank">flux RSS des 10 dernières mises à jour</a></li>\n
+EOT;
+?>
+		</ul>
+	</div>
 </body>
 </html>
