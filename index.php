@@ -15,7 +15,7 @@
  *
  * */
 
-if(! class_exists('ZipArchive')) {
+if(!class_exists('ZipArchive')) {
 	$message = 'Class ZipArchive is missing in PHP library';
 	header('HTTP/1.0 500 '.$message);
 	header('Content-type: text/plain');
@@ -29,6 +29,7 @@ const WORKDIR = 'workdir/';
 const CACHE_FILE = WORKDIR.'cache.json';
 const CACHE_ICONS = WORKDIR.'icons.bin';
 const LIFETIME = 7 * 24 * 3600; // in secondes (temps Unix) for rebuilding $cache and $cache_icons
+define('MAX_FILESIZE', (preg_match('#\.free\.fr$#', $_SERVER['SERVER_NAME'])) ? 1048576 : 2097152 /*4194304 */); // 1 mega-octet : 2 mega-octets 4 mega-octets
 
 const INFOS_FILE = 'infos.xml';
 define('INFOS_FILE_LEN', strlen(INFOS_FILE));
@@ -164,7 +165,7 @@ function buildCaches(&$zipsList) {
 					// look for an icon
 					for ($i=0; $i<$zip->numFiles; $i++) {
 						$filenameIcon = $zip->getNameIndex($i);
-						if(preg_match('#/icon\.(jpg|png|gif)$#', $filenameIcon, $matches)) {
+						if(preg_match("#^${keyName}/icon\.(jpg|png|gif)$#", $filenameIcon, $matches)) {
 							if(!array_key_exists($keyName, $cache_icons) or $cache_icons[$keyName][1] < $filedateEpoc) {
 								// on garde l'icone de la dernière version
 								$icon = $zip->getFromIndex($i);
@@ -311,6 +312,13 @@ EOT;
 }
 
 /* -------------- the core starts here ------------ */
+foreach(array(FOLDER, WORKDIR) as $fd) {
+	$filename = __DIR__ . "/$fd";
+	if(!is_dir($filename) and !mkdir($filename)) {
+		exit('Unable to get '.$fd.' directory');
+	}
+}
+
 if($files = glob(trim(FOLDER, '/').'/*.zip')) {
 	/*
 	 * $cache contient la liste des plugins et de leurs différentes versions
@@ -355,7 +363,8 @@ if($files = glob(trim(FOLDER, '/').'/*.zip')) {
 
 $displayAll = (isset($_GET['all_versions']));
 header("Cache-Control: public");
-header("Expires: ".date('r', filemtime(CACHE_FILE) + 86400)); // 24 heures
+$timestamp = (file_exists(CACHE_FILE)) ? filemtime(CACHE_FILE) : time();
+header("Expires: ".date('r', $timestamp + 86400)); // 24 heures
 
 /* ----------------- Parsing the parameters of the url --------------------- */
 if(!empty($_GET) and !isset($_GET['all_versions']) and !isset($_GET['grille'])) {
@@ -381,10 +390,16 @@ if(!empty($_GET) and !isset($_GET['all_versions']) and !isset($_GET['grille'])) 
 						$zip->close();
 					}
 				} else if(isset($_GET['download'])) { // envoi l'archive zip du plugin
-					header('Content-Type: application/zip');
-				    header('Content-Length: ' . filesize($download));
-				    header('Content-Disposition: attachment; filename="'.basename($download).'"');
-					readfile($download);
+					$filesize = filesize($download);
+					if($filesize < MAX_FILESIZE) {
+						header('Content-Type: application/zip');
+					    header('Content-Length: ' . filesize($download));
+					    header('Content-Disposition: attachment; filename="'.basename($download).'"');
+						readfile($download);
+					} else {
+						header('Status: 307 Temporary Redirect', false, 307);
+						header('Location: '.$download);
+					}
 					exit;
 				} else if(isset($_GET['icon'])) { // envoi de l'icône du plugin
 					if(array_key_exists($pluginName, $cache_icons)) {
@@ -526,11 +541,10 @@ $label_versions = ($displayAll) ? 'la dernière version seulement' : 'toutes les
 
 ?>
 
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
-	"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="fr" lang="fr">
+<!DOCTYPE html>
+<html lang="fr">
 <head>
-	<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1.0">
 	<link rel="icon" type="image/png" href="<?php echo dirname($root); ?>/icon.png" />
 	<title><?php echo $repo['description']; ?></title>
@@ -699,8 +713,12 @@ if(isset($cache)) {
 		$latestVersion = array_keys($versions)[0];
 		list($download, $filedate, $version, $repository, $author, $site, $description, $requirements) = $versions[$latestVersion];
 		$filedate = substr($filedate, 0, 10);
-		// $filename = basename($download);
-		$site1 = (trim($site) !== '') ? "\n".'<p><span>Site:</span><a href="'.$site.'">'.$site.'</a></p>' : '';
+		$site1 = '';
+		if(trim($site) !== '') {
+			$site1 = <<< SITE
+				<p><span>Site:</span><a href="'.$site.'">$site</a></p>\n
+SITE;
+		}
 		$href = $root.'?plugin='.$pluginName.'&download';
 		$cell1 = '';
 		$indent = '';

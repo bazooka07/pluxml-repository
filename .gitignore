@@ -2,4 +2,5 @@
 *.bak
 cache.json
 icons.bin
-plugins/*.zip
+plugins/
+workdir/
