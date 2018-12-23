@@ -316,9 +316,7 @@ $pluginName: { url: '$download', filedate: '$filedate', version: '$version', aut
 EOT;
 				}
 	$plugins = implode(",\n\t\t", $lines);
-	$repo = ((isset($_SERVER['HTTPS']) and !empty($_SERVER['HTTPS'])) ? 'https//' : 'http://').$_SERVER['HTTP_HOST'];
-	if($_SERVER['SERVER_PORT'] != '80') { $repo .= ':'.$_SERVER['SERVER_PORT']; }
-	$url_base = preg_replace('@[^/]*\.php$@', '', $_SERVER['PHP_SELF']);
+	$repo = ((isset($_SERVER['HTTPS']) and !empty($_SERVER['HTTPS'])) ? 'https://' : 'http://').$_SERVER['HTTP_HOST'];
 
 	header('Cache-Control: max-age=3600');
 	header('Content-Type: application/javascript; charset=utf-8');
@@ -327,7 +325,7 @@ EOT;
 
 $callback({
 	repo: '$repo',
-	url_base: '$url_base',
+	url_base: '${_SERVER['PHP_SELF']}',
 	plugins: {
 		$plugins
 	}
