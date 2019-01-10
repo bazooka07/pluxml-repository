@@ -21,6 +21,13 @@
  *
  * */
 
+// Customize these constants for your site
+const SITE_STATIC = false; // Générer des pages pour un site statique (pages Github)
+const SITE_TITLE = 'Kazimentou';
+const SITE_OWNER = 'Bazooka07';
+const SITE_AUTHOR = 'Jean-Pierre Pourrez';
+const SITE_DESCRIPTION = 'Plugins, thèmes, scripts pour le C.M.S. PluXml';
+
 if(!class_exists('ZipArchive')) {
 	$message = 'Class ZipArchive is missing in PHP library';
 	header('HTTP/1.0 500 '.$message);
@@ -28,6 +35,25 @@ if(!class_exists('ZipArchive')) {
 	echo $message;
 	exit;
 }
+
+// CORS support
+// https://developer.mozilla.org/en-US/docs/Web/HTTP/Server-Side_Access_Control
+if(isset($_SERVER['HTTP_ORIGIN'])) {
+    header("Access-Control-Allow-Origin: {$_SERVER['HTTP_ORIGIN']}");
+
+	if($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
+		header('Access-Control-Allow-Credentials: false');
+		header('Access-Control-Max-Age: 7200');    // cache for two hours
+	    if (isset($_SERVER['HTTP_ACCESS_CONTROL_REQUEST_METHOD'])) {
+	        header('Access-Control-Allow-Methods: GET, OPTIONS'); //Make sure you remove those you do not want to support
+		}
+	    if (isset($_SERVER['HTTP_ACCESS_CONTROL_REQUEST_HEADERS'])) {
+	        header("Access-Control-Allow-Headers: {$_SERVER['HTTP_ACCESS_CONTROL_REQUEST_HEADERS']}");
+		}
+	    exit(0);
+	}
+}
+
 
 define('VERSION', date('Y-m-d', filemtime(__FILE__)));
 const PLUGINS_FOLDER = 'plugins';
@@ -46,13 +72,6 @@ define('MAX_FILESIZE', (preg_match('#\.free\.fr$#', $_SERVER['SERVER_NAME'])) ? 
 const INFOS_FILE = 'infos.xml';
 define('INFOS_FILE_LEN', strlen(INFOS_FILE));
 const EXT_RSS = '-rss.xml';
-
-// Customize these constants for your site
-const SITE_STATIC = true;
-const SITE_TITLE = 'Kazimentou';
-const SITE_OWNER = 'Bazooka07';
-const SITE_AUTHOR = 'Jean-Pierre Pourrez';
-const SITE_DESCRIPTION = 'Plugins, thèmes, scripts pour le C.M.S. PluXml';
 
 $pageInfos = array(
 	'plugins'	=> array('imgSize' =>  48, 'imgAlt' => 'Icon', 'titleSingle' => 'plugin'),
@@ -269,7 +288,7 @@ function getPage($key=false) {
 	if(empty($key)) {
         if(empty($_GET)) { return 'plugins'; } // Here is the homepage
 		$key = 'page';
-	} elseif(!in_array($key, array('json', 'rss', 'xml', 'cat'))) {
+	} elseif(!in_array($key, array('json', 'latest', 'rss', 'xml', 'cat', 'lastUpdated'))) {
 		// this parameter is not allowed
 		return false;
 	}
@@ -298,15 +317,15 @@ function getBaseUrl1() {
  * Recherche dans l'archive Zip, une entrée finissant par infos.xml
  * */
 function searchInfosFile(ZipArchive $zipFile) {
-	$result = false;
 	for ($i=0; $i<$zipFile->numFiles; $i++) {
 		$filename = $zipFile->getNameIndex($i);
 		if(substr($filename, - INFOS_FILE_LEN) == INFOS_FILE) {
-			$result = $filename;
+			return $filename;
 			break;
 		}
 	}
-	return $result;
+
+	return false;
 }
 
 function buildCatalogue(&$zipsList, $page) {
@@ -424,11 +443,11 @@ function buildCatalogue(&$zipsList, $page) {
 		$url_base = preg_replace('@'.basename(__FILE__).'$@', '', filter_input(INPUT_SERVER, 'PHP_SELF', FILTER_SANITIZE_STRING));
 		$callbacks = array(
 			'hostname'		=> $hostname,
-			'url_base'		=> $url_base,
+			'urlBase'		=> $url_base,
 			'page'			=> $page,
-			'lastUpdate'	=> date('c', filemtime($filename))
+			'lastUpdate'	=> date('c', filemtime($filename)),
+			'items'			=> $lastReleases
 		);
-		$callbacks[$page] = $lastReleases;
 		$filename = WORKDIR.LAST_RELEASES.$page.'.json';
 		if(file_put_contents($filename, json_encode($callbacks, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX) === false) {
 			$error = "No rights for writing in the $filename file.\nFeel free for calling the webmaster.";
@@ -499,6 +518,23 @@ function getPluginName(ZipArchive $zipFile) {
 
 function getThemeName(ZipArchive $zipFile) {
 	return preg_replace('@^(\w[^/]*).*@', '$1',$zipFile->getNameIndex(0));
+}
+
+function exportLatest($page, $static=false) {
+	if(empty($page)) { exit('No  catalog for '.$page); }
+
+	if(!isset($_SERVER['HTTP_ORIGIN'])) {
+		header('HTTP/1.1 403 Access Forbidden');
+		header('Content-Type: text/plain');
+		echo "I have a dream : You're in a jail !\n\n";
+		exit;
+	}
+
+	checkCatalogue($page);
+	$filename = WORKDIR.LAST_RELEASES."$page.json";
+	header('Content-Type: application/json');
+	header('Content-Length: ' . filesize($filename));
+	readfile($filename);
 }
 
 function exportJSON($page, $static=false) {
@@ -647,10 +683,15 @@ function exportXML($page, $static=false) {
 <document>
 BEGIN_XML;
 
+	/*
+	 * // Désactivé pour assurer une certaine compatibilité avec l'existant
 	$title = SITE_TITLE;
 	$author = SITE_AUTHOR;
 	$name = SITE_OWNER;
-	$version = getRepoVersion($page);
+
+	$filename = WORKDIR.LAST_RELEASES."$page.json";
+	$version = "$page-".date('ymdHi', filemtime($filename));
+
 	$description = SITE_DESCRIPTION;
 	$output .= <<< XML_PLUS
 	<repo>
@@ -665,6 +706,7 @@ BEGIN_XML;
 		<repo_icon>$repo_icon</repo_icon>
 	</repo>\n
 XML_PLUS;
+	*/
 
 	$cache = getCatalog($page);
 	foreach($cache as $item=>$infos) {
@@ -679,7 +721,7 @@ XML_PLUS;
 	$output .= <<< PLUGIN
 	<plugin>
 		<title>$item</title>
-		<author>$author</author>
+		<author>${release['author']}</author>
 		<version>$version</version>
 		<date>$filedate</date>
 		<site>$site</site>
@@ -704,8 +746,11 @@ END_XML;
 }
 
 function getRepoVersion($page) {
-	$filename = WORKDIR."$page.json";
-	return "$page-".date('ymdHi', filemtime($filename));
+	checkCatalogue($page);
+	$filename = WORKDIR.LAST_RELEASES."$page.json";
+	$content =
+	header('Content-Type: text/plain');
+	echo date('ymd', filemtime($filename))."\n\n";
 }
 
 function callbackRequest($page, $callback) {
@@ -723,7 +768,7 @@ function callbackRequest($page, $callback) {
 		$comments = <<< EOT
 /* ----- $title's repository @ $hostname$url_base ----- */\n\n
 EOT;
-		$output = $comments.$callback.'('.json_encode(file_get_contents($filename), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES).');';
+		$output = $comments.$callback.'("'.addslashes(file_get_contents($filename)).'");';
 		header('Cache-Control: max-age=3600');
 		header('Content-Type: application/javascript; charset=utf-8');
 		echo $output;
@@ -833,6 +878,9 @@ function cmd_infos($page, $item) {
 	}
 }
 
+/**
+ * Send an image : icon for plugin, preview for theme.
+ * */
 function cmd_icon($page, $item) {
 	$cache = getCatalog($page);
 	if(array_key_exists($item, $cache)) {
@@ -860,7 +908,7 @@ function init() {
 		array_map(function($item) { return WORKDIR.ASSETS."/$item"; }, $GLOBALS['ALL_PAGES'])
 	);
 	foreach($folders as $dir1) {
-		if(!is_dir($dir1) and !mkdir($dir1, 0770, true)) {
+		if(!is_dir($dir1) and !mkdir($dir1, 0755, true)) {
 			header('Content-Type: text/plain;charset=uft-8');
 			$dir1 = trim($dir1, '/');
 			printf("Unable to create %s/$dir1 folder.", __DIR__) ;
@@ -923,6 +971,7 @@ if(isset($_GET['callback'])) {
 	exit;
 } else {
 	foreach(array(
+		'latest'		=> 'exportLatest',
 		'json'			=> 'exportJSON',
 		'rss'			=> 'exportRSS',
 		'lastUpdated'	=> 'getRepoVersion',
