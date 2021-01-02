@@ -1,4 +1,5 @@
 *.zip
+!/themes/*.zip
 *.bak
 *.html
 !index.html
