@@ -1,6 +1,7 @@
 *.zip
 *.bak
 *.html
+!index.html
 *.xml
 /plugins/
 /workdir/
