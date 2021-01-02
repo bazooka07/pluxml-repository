@@ -1,0 +1,250 @@
+* {margin:0; padding: 0; box-sizing: border-box;}
+a[href=""] { display: none; }
+body {
+	display: flex;
+	flex-direction: column;
+	min-height: 100vh;
+	font-family: 'Noto Sans',Droid,Arial,Georgia,Sans-Serif;
+	color: #000; background-color: #ebeff2; background-image: url('background.png');
+}
+#main { flex-grow: 1; }
+header .cell-border {margin-top: 0.7rem;}
+.cell-border.logo {margin-top: 2.5rem;}
+.logo a {display: block;}
+.logo img {max-width:100%;}
+.nowrap > * { margin: 0 0.3rem; white-space: nowrap;}
+#bandeau, #footer {padding: 0.3rem 0.7rem 0 0; background-color: #ddd; line-height: 1.2; font-size: 82%;}
+#bandeau { display: grid; grid-template-columns: 60px auto 5rem; }
+#bandeau h2 {grid-column: span 3;}
+#bandeau span {white-space: nowrap;}
+#bandeau > div:first-of-type > div:last-of-type {margin-top: 2.2rem;}
+#bandeau > div:last-of-type label { display: block; }
+#bandeau a.toggle { display: block; }
+
+#menu {position: fixed; top: 0; left: 0;}
+#toggle-menu { display: none; }
+label[for="toggle-menu"] {
+	display: block;
+	width: 2rem;
+	font-size: 150%;
+	padding: 0.3rem;
+	background-color: #ddd;
+	text-decoration: none;
+	cursor: pointer;
+	transition: transform 0.2s ease;
+}
+#menu-ul {
+	position: absolute;
+	top: 3rem;
+	left: -7rem;
+	width: 7rem;
+	background-color: #eee;
+	text-align: center;
+	list-style: none;
+	transition: left 0.3s ease;
+}
+#toggle-menu:checked + label + #menu-ul { left: 0; }
+#toggle-menu:checked + label { transform: rotate(-90deg); }
+#menu-ul li input[type="radio"] { display: none; }
+#menu-ul li input[type="radio"] + label { display: block; padding: 0.3rem 0.5rem; }
+#menu-ul li input[type="radio"]:checked + label { background-color: brown; color: #fff; }
+#menu-ul li input[type="radio"]:not(:checked) + label:hover { color: #fff; cursor: pointer; }
+
+h1, h2, h3, h4, h5 {text-align: center;}
+h3 {margin: 0.5em 0;}
+h3 + p {margin:0; padding:0; text-align: center; font-style: italic;}
+h3 + p a {padding: 0 10px;}
+.txt-center { text-align: center; text-indent: 0;}
+#bandeau a {text-decoration: none;}
+#bandeau div {padding: 0; text-align: center;}
+#bandeau label {cursor: pointer;}
+h1 {margin-top: 0;}
+h1 + p {margin-bottom: 0;}
+label, a {padding: 0 4px;}
+label:hover, a:hover {color: #FFF; background-color: green;}
+#bandeau a img, #detail a img, #detail td:first-of-type span {border: 2px solid transparent;}
+#bandeau a img:hover, #detail a img:hover, #detail td:first-of-type span:hover {border-color: green;}
+.rss:hover {background-color: inherit;}
+
+#catalogue {padding-right: 0.7rem;}
+#catalogue article {
+	display: flex;
+	flex-direction: column;
+	max-width: 23rem;
+	margin: 0.5rem auto;
+	padding: 0;
+	background-color: #fff;
+	border: none;
+	box-shadow: 4px 4px 3px #aaa;
+	border-radius: 0.5rem;
+}
+#catalogue article header {
+	margin: 0;
+	padding: 0;
+	background-color: #556;
+	color: orange;
+	text-align: center;
+	letter-spacing: 0.2rem;
+}
+#catalogue article header a {
+	display: inline-block;
+	width: 100%;
+	margin: 0;
+	padding: 0.3rem 0;
+	color: inherit;
+	text-decoration: none;
+}
+#catalogue article header a:hover {
+	color: #fff;
+}
+#catalogue article section {
+	flex-grow: 1;
+}
+#catalogue article footer {
+	margin: 0;
+	background-color: orange;
+	text-align: center;
+}
+#catalogue article p { margin: 0.3rem 0; }
+#catalogue article section span {
+	display: inline-block;
+	width: 4rem;
+	text-align: right;
+	margin-right: 0.5rem;
+	font-style: italic;
+	color: #aaa;
+}
+#catalogue article footer span {
+	white-space: nowrap;
+}
+#catalogue .descr {
+	padding: 0 0.5rem;
+	font-family: "Skolar Regular","Roboto Slab","Droid Serif",Cambria,Georgia,"Times New Roman",Times,serif;
+	font-size: 120%;
+	overflow: auto;
+}
+#catalogue.themes .descr {
+	text-align: center;
+}
+#catalogue .descr > a {
+	text-decoration: none;
+}
+#catalogue.plugins .descr > a {
+	float: left;
+	margin-right: 0.5rem;
+	padding: 0;
+}
+.error {
+	width: 100%;
+	padding: 2rem 0;
+	font-size: 200%;
+	color: red;
+	font-weight: bold;
+	text-align: center;
+	letter-spacing: 0.1rem;
+}
+#footer { padding: 0.2rem 0; text-align: center; }
+#footer span { white-space: nowrap; }
+#footer a { text-decoration: none; }
+
+/* -------- multi-versions ----------------- */
+#all-versions { padding: 0.8rem; overflow: auto; }
+#all-versions > table { width: 100%; border-collapse: collapse; --color1: #C2C2A6; }
+#all-versions > table thead { background-color: var(--color1); }
+#all-versions > table thead th { padding: 0.2rem 0.5rem; }
+#all-versions-tbody { background-color: #fff; vertical-align: top; }
+#all-versions-tbody tr:nth-of-type(2n) { background-color: #DAE7E6; }
+#all-versions-tbody tr.latest-version { border-top: 4px ridge var(--color1); }
+#all-versions-tbody td { padding: 0.3rem; }
+#all-versions-tbody td:nth-of-type(3) { text-align: center; }
+#all-versions-tbody td:not(first-of-type) { border-left: 1px solid var(--color1); }
+#all-versions-tbody td:not(.wrap) { white-space: nowrap; }
+#all-versions-tbody th:last-of-type { min-width: 26rem; }
+
+/* ======= responsive design =============== */
+
+
+@media screen and (min-width: 41rem) {
+	#catalogue {display: flex; justify-content: space-around; flex-wrap: wrap;}
+	#catalogue article {width: 48%; margin: 0.5rem 0.3rem;}
+}
+@media screen and (min-width: 46rem) {
+	#bandeau {position: sticky; top:0; padding: 0.3rem 2rem 0; font-size: 100%;}
+	#bandeau h1, #bandeau h2 { padding: 0 1rem; }
+	.logo { margin-top: 0;
+}
+@media screen and (min-width: 63rem) {
+	#bandeau {position: static; padding-bottom: 0.5rem; padding: 0.3rem 2% 0.5rem;}
+	#bandeau > div:first-of-type {padding: 0 1.5%;}
+	#bandeau h1 {margin-top: 1rem; lline-height: 1.6;}
+
+	#menu > label[for="toggle-menu"] {display: none;}
+	#menu { position: sticky; width: 100%;  background-color: transparent; }
+	#nav-toggle + form { position: initial; width: 100%; background-color: transparent; }
+	#menu-ul { position: static; width:initial; display: flex; justify-content: center; padding-top: 0.5rem; background-color: transparent; }
+	#menu-ul li label {display: block; margin: 0 0.5rem; background-color: #888; color: #fff; border-radius: 0.5rem; letter-spacing: 0.1rem;}
+	#menu-ul li label:hover {background-color: green;}
+
+	#catalogue article {width: 31.8%;}
+	#catalogue.count-2 {justify-content: center;}
+	#catalogue.count-2 article { margin: 0.5rem 1rem;}
+
+	.url-help {max-width: 64rem; margin: 0.5rem auto;}
+}
+@media screen and (min-width: 86rem) {
+	#catalogue article {width: 25.5%;}
+	#catalogue.count-3 {justify-content: center;}
+	#catalogue.count-3 article { margin: 0.5rem 1rem;}
+}
+@media screen and (min-width: 96rem) {
+	#catalogue article {width: 19.3%;}
+	#catalogue.count-4 {justify-content: center;}
+	#catalogue.count-4 article { margin: 0.5rem 1rem;}
+}
+
+/* ------------ css spinner ------------- */
+/* https://github.com/tobiasahlin/SpinKit/blob/master/css/spinners/7-three-bounce.css */
+@-webkit-keyframes three-bounce {
+	0%, 80%, 100% {
+		-webkit-transform: scale(0);
+		transform: scale(0);
+	}
+	40% {
+		-webkit-transform: scale(1);
+		transform: scale(1);
+	}
+}
+@keyframes three-bounce {
+	0%, 80%, 100% {
+		-webkit-transform: scale(0);
+		transform: scale(0);
+	}
+	40% {
+		-webkit-transform: scale(1);
+		transform: scale(1);
+	}
+}
+.spinner.three-bounce {
+	display: none;
+	position: fixed;
+	width: 12rem;
+	top: 50vh;
+	left: calc(50vw - 6rem);
+	margin: 0 auto;
+	text-align: center;
+	transform: translateY(-50%);
+}
+.spinner.three-bounce.active {
+	display: block;
+}
+.spinner.three-bounce > div {
+	width: 3rem;
+	height: 3rem;
+	background-color: #333;
+	border-radius: 100%;
+	display: inline-block;
+	-webkit-animation: sk-three-bounce 1.4s ease-in-out 0s infinite both;
+	animation: three-bounce 1.4s ease-in-out 0s infinite both;
+}
+.spinner.three-bounce > div:nth-of-type(1) { -webkit-animation-delay: -0.32s; animation-delay: -0.32s; }
+.spinner.three-bounce > div:nth-of-type(2) { -webkit-animation-delay: -0.16s; animation-delay: -0.16s; }
