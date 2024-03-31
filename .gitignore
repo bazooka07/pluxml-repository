@@ -1,9 +1,9 @@
 *.zip
-!/themes/*.zip
+themes/
 *.bak
 *.html
 !index.html
 *.xml
-/plugins/
-/workdir/
-/assets/
+plugins/
+workdir/
+assets/

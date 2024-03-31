@@ -1,6 +1,7 @@
 (function() {
 	'use strict';
 
+	const DEBUG = false;
 	const catalogDiv = document.getElementById('catalogue');
 	const rss = document.querySelector('a.rss');
 	const footer = document.getElementById('footer');
@@ -13,6 +14,11 @@
 		themes: '300',
 		scripts: '48'
 	};
+	const IMG = {
+		plugins: 'icon',
+		themes: 'preview',
+		scripts: 'img'
+	}
 
 	var imgSize = IMG_SIZES.plugins;
 	var page = 'plugins';
@@ -109,7 +115,14 @@
 					for(var i in datas.items) {
 						const article = document.createElement('ARTICLE');
 						article.innerHTML = pattern.replace(FIELDS_PATTERN, function(value, p1) {
-							if(p1 in datas.items[i]) { return datas.items[i][p1]; }
+							if(p1 in datas.items[i]) {
+								if(p1 !='img' || typeof datas.items[i]['img'] == 'string') {
+									return datas.items[i][p1];
+								} else {
+									DEBUG && console.log('Missing ' + IMG[page] + ' for ' + page + ' : ' + i);
+									return 'assets-static/' + page + '.png';
+								}
+							}
 							switch(p1) {
 								case 'img' : return 'assets/' + datas.page + '.png'; break;
 								default: return '';
@@ -166,7 +179,7 @@
 		imgSize = IMG_SIZES[page];
 		const path = (allVersionsTbody != null) ? '' : 'latest/';
 		const url = window.location.href.replace(/[^\/]*$/, '') + 'workdir/' + path + itemsType + '.json';
-		// console.log(url);
+		DEBUG && console.log(url);
 		xhr.open('GET', url);
 		xhr.send();
 	}
@@ -185,6 +198,9 @@
 	}
 
 	document.addEventListener('DOMContentLoaded', function(event) {
-		tabs[0].click();
+		let el = document.querySelector('#menu-ul input[type="radio"]:checked')
+		if(el) {
+			displayCatalog(el.value);
+		}
 	});
 })();
