@@ -276,7 +276,7 @@ div.nothing { padding: 2rem 0; color: red; font-size: 250%; font-weight: bold;}
 }
 STYLESHEET;
 
-$root = filter_input(INPUT_SERVER, 'PHP_SELF', FILTER_SANITIZE_STRING);
+$root = htmlspecialchars($_SERVER['PHP_SELF']);
 // Only used if $page == 'plugins'
 $specialHTMLPages = array('index', 'all');
 
@@ -294,7 +294,7 @@ function getPage($key=false) {
 	}
 
 	if(!empty($_GET[$key])) {
-		$page = filter_input(INPUT_GET, $key, FILTER_SANITIZE_STRING);
+		$page = htmlspecialchars($_GET[$key]);
 		if(!empty($page) and in_array($page, $GLOBALS['ALL_PAGES'])) {
 			return $page;
 		} else {
@@ -440,7 +440,7 @@ function buildCatalogue(&$zipsList, $page) {
 	if(!empty($lastReleases)) {
 		// build parameter for the callback request (JSONP)
 		$hostname = ((isset($_SERVER['HTTPS']) and !empty($_SERVER['HTTPS'])) ? 'https://' : 'http://').$_SERVER['HTTP_HOST'];
-		$url_base = preg_replace('@'.basename(__FILE__).'$@', '', filter_input(INPUT_SERVER, 'PHP_SELF', FILTER_SANITIZE_STRING));
+		$url_base = preg_replace('@'.basename(__FILE__).'$@', '', htmlspecialchars($_SERVER['PHP_SELF']));
 		$callbacks = array(
 			'hostname'		=> $hostname,
 			'urlBase'		=> $url_base,
@@ -763,7 +763,7 @@ function callbackRequest($page, $callback) {
 	$filename = WORKDIR.LAST_RELEASES."$page.json";
 	if(file_exists($filename)) {
 		$hostname = ((isset($_SERVER['HTTPS']) and !empty($_SERVER['HTTPS'])) ? 'https://' : 'http://').$_SERVER['HTTP_HOST'];
-		$url_base = preg_replace('@'.basename(__FILE__).'$@', '', filter_input(INPUT_SERVER, 'PHP_SELF', FILTER_SANITIZE_STRING));
+		$url_base = preg_replace('@'.basename(__FILE__).'$@', '', htmlspecialchars($_SERVER['PHP_SELF']));
 		$title = SITE_TITLE;
 		$comments = <<< EOT
 /* ----- $title's repository @ $hostname$url_base ----- */\n\n
@@ -949,7 +949,11 @@ header("Cache-Control: public");
 /* ----------------- Parsing the parameters of the url --------------------- */
 // One item is required
 foreach($ALL_PAGES as $page) {
-	$item = filter_input(INPUT_GET, singlePage($page), FILTER_SANITIZE_STRING);
+	if(!isset($_GET[singlePage($page)])) {
+		continue;
+	}
+
+	$item = htmlspecialchars($_GET[singlePage($page)]);
 	if(!empty($item)) {
 		foreach(array('download', 'infos', 'icon') as $cmd) {
 			if(isset($_GET[$cmd])) {
@@ -966,7 +970,7 @@ foreach($ALL_PAGES as $page) {
 
 // working with catalogs
 if(isset($_GET['callback'])) {
-	$callback = filter_input(INPUT_GET, 'callback', FILTER_SANITIZE_STRING);
+	$callback = htmlspecialchars($_GET['callback']);
 	callbackRequest(getPage('cat'), $callback);
 	exit;
 } else {
@@ -1031,33 +1035,33 @@ for($pass=0; $pass < $passMax; $pass++) {
 <head>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1.0">
-	<link rel="icon" type="image/png" href="<?php echo $root; ?>icon.png" />
-	<title><?php echo SITE_DESCRIPTION; ?></title>
-	<link rel="alternate" type="application/rss+xml" href="<?php echo $hrefRSS; ?>" title="<?php echo SITE_TITLE; ?>" />
-	<link rel="stylesheet" href="<?php echo STYLESHEET_FILENAME; ?>" />
+	<link rel="icon" type="image/png" href="<?= $root; ?>icon.png" />
+	<title><?= SITE_DESCRIPTION; ?></title>
+	<link rel="alternate" type="application/rss+xml" href="<?= $hrefRSS; ?>" title="<?= SITE_TITLE; ?>" />
+	<link rel="stylesheet" href="<?= STYLESHEET_FILENAME; ?>" />
 </head>
-<body class="page-<?php echo $page; ?>">
+<body class="page-<?= $page; ?>">
 	<header id="bandeau">
 		<div class="logo cell-border">
-			<a href="https://www.pluxml.org" target="_blank" title="Le site de PluXml"><img src="<?php echo ASSETS; ?>logo.png" alt="Logo du site" /></a>
+			<a href="https://www.pluxml.org" target="_blank" title="Le site de PluXml"><img src="<?= ASSETS; ?>logo.png" alt="Logo du site" /></a>
 		</div>
 		<div>
 			<h1><span>Dépôt d'extensions</span> multi-versions <span>pour Pluxml</span></h1>
 		</div>
 		<div class="cell-border">
 <?php $href = ($pass == 0) ? basename(__FILE__).'?rss='.$page : $page.EXT_RSS; ?>
-			<a class="rss" href="<?php echo $href; ?>" target="_blank"><img width="32" height="32" src="<?php echo ASSETS; ?>rss.png" alt="Flux RSS" /></a><br />
+			<a class="rss" href="<?= $href; ?>" target="_blank"><img width="32" height="32" src="<?= ASSETS; ?>rss.png" alt="Flux RSS" /></a><br />
 			<label for="help_nav" style="margin-top: 1rem;">Aide</label><br />
 <?php
 if($page == 'plugins') {
 	$caption = (!$displayGrid and !$displayAll) ? 'Tableau' : 'Standard';
-	echo <<< GRILLE
-			<a href="$hrefDisplayMode">$caption</a>\n
-GRILLE;
+?>
+			<a href="<?= $hrefDisplayMode ?>">$caption</a>
+<?php
 }
 ?>
 		</div>
-		<h2 class="nowrap">Welcome at <span><?php echo SITE_TITLE; ?>'s repository</span> and get <span>the finest addons</span><span>for PluXml</span></h2>
+		<h2 class="nowrap">Welcome at <span><?= SITE_TITLE; ?>'s repository</span> and get <span>the finest addons</span><span>for PluXml</span></h2>
 	</header>
 	<nav id="menu">
 		<label for="nav-toggle" title="Menu">☰</label>
@@ -1067,9 +1071,9 @@ GRILLE;
 	if($pass == 0) {
         $url = basename($_SERVER['PHP_SELF']);
 ?>
-            <li><a href="<?php echo $url; ?>">Plugins</a></li>
-			<li><a href="<?php echo $url; ?>?page=themes">Thèmes</a></li>
-			<li><a href="<?php echo $url; ?>?page=scripts">Scripts</a></li>
+            <li><a href="<?= $url; ?>">Plugins</a></li>
+			<li><a href="<?= $url; ?>?page=themes">Thèmes</a></li>
+			<li><a href="<?= $url; ?>?page=scripts">Scripts</a></li>
 <?php
     } else {
 ?>
@@ -1096,7 +1100,7 @@ GRILLE;
 if($pass == 0 and !empty($cache) and $page == 'plugins') {
 ?>
 	<p class="txt-center">
-		<a href="<?php echo $hrefVersions; ?>">Afficher <?php echo $label_versions; ?></a>
+		<a href="<?= $hrefVersions; ?>">Afficher <?= $label_versions; ?></a>
 	</p>
 <?php
 }
@@ -1130,26 +1134,25 @@ SITE;
 				$href = $latestRelease['download'];
 			}
 			$src = (!empty($infos['img'])) ? $infos['img'] :  ASSETS.'default-icon.png';
-			echo <<< EOT
+?>
 			<article>
-				<header><a href="$href" download>$itemName</a></header>
+				<header><a href="<?= $href ?>" download><?= $itemName ?></a></header>
 				<section>
-					<p><span>Auteur:</span>${latestRelease['author']}</p>
-					<p><span>Version:</span>$version</p>
-					<p><span>Date:</span>$filedate</p>$site1
+					<p><span>Auteur:</span><?= $latestRelease['author'] ?></p>
+					<p><span>Version:</span><?= $version ?></p>
+					<p><span>Date:</span><?= $filedate ?></p><?= $site1 ?>
 					<div class="descr">
-						<a href="$href" download><img src="$src" width="$imgSize" height="$imgSize" alt="$imgAlt" /></a>
-						<p>${latestRelease['description']}</p>
+						<a href="<?= $href ?>" download><img src="<?= $src ?>" width="<?= $imgSize ?>" height="<?= $imgSize ?>" alt="<?= $imgAlt ?>" /></a>
+						<p><?= $latestRelease['description'] ?></p>
 					</div>
 				</section>
-				<footer>Cliquez sur le titre <span>pour télécharger le ${titleSingle}</span></footer>
+				<footer>Cliquez sur le titre <span>pour télécharger le <?= $titleSingle ?></span></footer>
 			</article>
-
-EOT;
+<?php
 		}
-		echo <<< EOT
-		</div>\n
-EOT;
+?>
+		</div>
+<?php
 	} else { // début mode grille
 ?>
 	<div class="scrollable-table">
@@ -1180,7 +1183,7 @@ URL;
 				$filedate = substr($release['filedate'], 0, 10);
 				$filename = basename($release['download']);
 ?>
-			<tr <?php echo ($displayAll and $firstRow) ? ' class="first"' : ''; ?>>
+			<tr <?= ($displayAll and $firstRow) ? ' class="first"' : ''; ?>>
 <?php
 				if($firstRow) {
 					// get the icon plugin
@@ -1202,17 +1205,15 @@ CELL1;
 				}
 				$description = (!empty($release['description'])) ? $release['description'] : '&nbsp;';
 				$requirements = (!empty($release['requirements'])) ? $release['requirements'] : '&nbsp;';
-				echo <<< VERSION
-					<td>$cell1</td>
-					<td><strong>$cell2</strong></td>
-					<td>$cell3</td>
-					<td><a href="${release['download']}" download>$filename</a></td>
-					<td>$url</td>
-					<td>$filedate</td>
-					<td>$description</td>
-					<td>$requirements</td>\n
-VERSION;
 ?>
+					<td><?= $cell1 ?></td>
+					<td><strong><?= $cell2 ?></strong></td>
+					<td><?= $cell3 ?></td>
+					<td><a href="<?= $release['download'] ?>" download><?= $filename ?></a></td>
+					<td><?= $url ?></td>
+					<td><?= $filedate ?></td>
+					<td><?= $description ?></td>
+					<td><?= $requirements ?></td>
 		</tr>
 <?php
 				if(!$displayAll) {
@@ -1230,7 +1231,7 @@ VERSION;
 	} // fin mode grille
 } else { ?>
 	<article>
-		<div class="txt-center nothing">Le dépôt ne contient aucun <?php echo $titleSingle; ?>.</div>
+		<div class="txt-center nothing">Le dépôt ne contient aucun <?= $titleSingle; ?>.</div>
 	</article>
 <?php
 }
@@ -1243,30 +1244,26 @@ VERSION;
 		<p class="nowrap txt-center">
 			<span>Lovely designed by theirs authors</span>
 			<a href="<?php download_source(); ?>">Download source of this page</a>
-			<span>version <?php echo VERSION; ?></span>
-			<span>Php <?php echo PHP_VERSION; ?></span>
+			<span>version <?= VERSION; ?></span>
+			<span>Php <?= PHP_VERSION; ?></span>
 		</p>
 <?php
 		if(!empty($cache)) {
 			// Il y a des plugins, thêmes, ...
+			$baseUrl = $root . basename(__FILE__);
 ?>
 		<h3>Paramètres de l'url :</h3>
 		<div class="url-help scrollable-table">
 			<ul>
-<?php
-			$baseUrl = $root.basename(__FILE__);
-			echo <<< EOT
-			<li><strong>{$baseUrl}?plugin=xxxxxx</strong> renvoie le numéro de version du plugin xxxxxx au format texte</li>
-			<li><strong>{$baseUrl}?plugin=xxxxxx&amp;download</strong> télécharge la dernière version du plugin xxxxxx</li>
-			<li><strong>{$baseUrl}?plugin=xxxxxx&amp;icon</strong> renvoie l'icône du plugin xxxxxx</li>
-			<li><strong>{$baseUrl}?json</strong> renvoie les infos pour <a href="{$baseUrl}?json" target="_blank">toutes les versions des plugins au format JSON</a></li>
-			<li><strong>{$baseUrl}?callback=myCallback</strong> renvoie les <a href="{$baseUrl}?callback=myCallback">infos de la dernière version de chaque plugin au format JSON</a> <em>avec rappel de la fonction myCallback (JSONP)</em></li>
-			<li><strong>{$baseUrl}?plugin=xxxxxx&amp;infos</strong> renvoie les infos du plugin xxxxxx au format XML</li>
-			<li><strong>{$baseUrl}?xml</strong> renvoie les infos de la <a href="{$baseUrl}?xml" target="_blank">dernière version de chaque plugin au format XML</a></li>
-			<li><strong>{$baseUrl}?lastUpdated</strong> renvoie la <a href="{$baseUrl}?lastUpdated" target="_blank">date du plugin le plus récent mis en ligne</a></li>
-			<li><strong>{$baseUrl}?rss</strong> Récupère le <a href="{$baseUrl}?rss" target="_blank">flux RSS des 10 dernières mises à jour</a></li>\n
-EOT;
-?>
+				<li><strong><?= $baseUrl ?>?plugin=xxxxxx</strong> renvoie le numéro de version du plugin xxxxxx au format texte</li>
+				<li><strong><?= $baseUrl ?>?plugin=xxxxxx&amp;download</strong> télécharge la dernière version du plugin xxxxxx</li>
+				<li><strong><?= $baseUrl ?>?plugin=xxxxxx&amp;icon</strong> renvoie l'icône du plugin xxxxxx</li>
+				<li><strong><?= $baseUrl ?>?json</strong> renvoie les infos pour <a href="<?= $baseUrl ?>?json" target="_blank">toutes les versions des plugins au format JSON</a></li>
+				<li><strong><?= $baseUrl ?>?callback=myCallback</strong> renvoie les <a href="<?= $baseUrl ?>?callback=myCallback">infos de la dernière version de chaque plugin au format JSON</a> <em>avec rappel de la fonction myCallback (JSONP)</em></li>
+				<li><strong><?= $baseUrl ?>?plugin=xxxxxx&amp;infos</strong> renvoie les infos du plugin xxxxxx au format XML</li>
+				<li><strong><?= $baseUrl ?>?xml</strong> renvoie les infos de la <a href="<?= $baseUrl ?>?xml" target="_blank">dernière version de chaque plugin au format XML</a></li>
+				<li><strong><?= $baseUrl ?>?lastUpdated</strong> renvoie la <a href="<?= $baseUrl ?>?lastUpdated" target="_blank">date du plugin le plus récent mis en ligne</a></li>
+				<li><strong><?= $baseUrl ?>?rss</strong> Récupère le <a href="<?= $baseUrl ?>?rss" target="_blank">flux RSS des 10 dernières mises à jour</a></li>\n
 			</ul>
 		</div>
 <?php
